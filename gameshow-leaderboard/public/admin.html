@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#070818" />
+  <title>Games Night Control</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Orbitron:wght@600;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root { --bg: #070818; --card: #10132e; --line: #262b5c; --ink: #eef1ff; --dim: #8990b8; --accent: #ff2bd6; }
+    * { box-sizing: border-box; margin: 0; }
+    body { background: radial-gradient(ellipse at top, #1d1450, var(--bg) 60%) fixed; color: var(--ink); font: 500 16px 'Rajdhani', system-ui, sans-serif; padding: 16px 16px 120px; max-width: 900px; margin: 0 auto; }
+    h1 { font: 22px 'Bungee'; letter-spacing: 0.04em; display: flex; align-items: center; gap: 10px; }
+    h1 small { font: 600 11px 'Orbitron'; letter-spacing: 0.25em; color: var(--dim); margin-left: auto; display: flex; gap: 6px; align-items: center; }
+    h1 small i { width: 8px; height: 8px; border-radius: 50%; background: #ffb020; display: inline-block; }
+    h1 small.ok i { background: #39ff88; box-shadow: 0 0 8px #39ff88; }
+    .teams { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 16px 0; }
+    .team { background: var(--card); border: 1px solid var(--line); border-left: 5px solid var(--c); border-radius: 12px; padding: 12px; }
+    .team-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .team-name { font: 18px 'Bungee'; color: #fff; text-shadow: 0 0 10px var(--c); }
+    .team-score { font: 900 30px 'Orbitron'; font-variant-numeric: tabular-nums; }
+    .team-rank { font: 600 11px 'Orbitron'; color: var(--dim); letter-spacing: 0.2em; }
+    .members { color: var(--dim); font-size: 13px; margin: 2px 0 10px; }
+    .btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    button { font: 700 16px 'Orbitron'; color: var(--ink); background: #1a1f48; border: 1px solid var(--line); border-radius: 9px; padding: 12px 4px; cursor: pointer; touch-action: manipulation; }
+    button:active { transform: scale(0.96); }
+    .plus { background: color-mix(in srgb, var(--c) 22%, #12163a); border-color: color-mix(in srgb, var(--c) 55%, transparent); }
+    .minus { color: #ff8da0; }
+    .custom { display: flex; gap: 6px; margin-top: 6px; }
+    .custom input { flex: 1; min-width: 0; }
+    input, select { font: 600 16px 'Rajdhani'; background: #0b0d24; color: var(--ink); border: 1px solid var(--line); border-radius: 9px; padding: 11px 12px; }
+    .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+    .panel h2 { font: 600 11px 'Orbitron'; letter-spacing: 0.25em; color: var(--dim); margin-bottom: 10px; }
+    .row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .row > * { flex: 1 1 auto; }
+    .row input { flex: 3 1 200px; }
+    .danger { color: #ff8da0; border-color: #5c2633; }
+    .gold { background: linear-gradient(90deg, #6a4b00, #a87b00); border-color: #ffc400; }
+    .reply { position: fixed; left: 16px; right: 16px; bottom: 16px; max-width: 868px; margin: 0 auto; background: #0b0d24ee; border: 1px solid var(--accent); border-radius: 12px; padding: 12px 14px; white-space: pre-wrap; font: 600 15px 'Rajdhani'; box-shadow: 0 0 30px rgba(255, 43, 214, 0.3); transform: translateY(150%); transition: transform 0.3s; }
+    .reply.on { transform: none; }
+    .reply.err { border-color: #ff2a55; }
+    .lock { position: fixed; inset: 0; background: var(--bg); display: grid; place-items: center; z-index: 10; padding: 16px; }
+    .lock form { display: grid; gap: 12px; width: min(320px, 100%); text-align: center; }
+    .lock input { text-align: center; font: 900 28px 'Orbitron'; letter-spacing: 0.3em; }
+    .help { color: var(--dim); font-size: 14px; line-height: 1.5; }
+    .help code { color: #9fe9ff; background: #0b0d24; padding: 1px 6px; border-radius: 4px; }
+    a { color: #9fe9ff; }
+  </style>
+</head>
+<body>
+  <div class="lock" id="lock">
+    <form id="lockForm">
+      <h1 style="justify-content:center">HOST CONTROL</h1>
+      <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN" required />
+      <button type="submit" class="gold">UNLOCK</button>
+      <div class="help" id="lockMsg"></div>
+    </form>
+  </div>
+
+  <h1>GAMES NIGHT <small id="conn"><i></i>OFFLINE</small></h1>
+  <div class="teams" id="teams"></div>
+
+  <div class="panel">
+    <h2>SHOW CONTROL</h2>
+    <div class="row" style="margin-bottom:6px">
+      <button data-cmd="undo">↶ UNDO</button>
+      <button data-cmd="round next">NEXT ROUND</button>
+      <button data-cmd="winner" class="gold">🏆 WINNER</button>
+      <button data-cmd="clear">CLEAR SCREEN</button>
+    </div>
+    <div class="row">
+      <button data-cmd="music on">♫ MUSIC ON</button>
+      <button data-cmd="music off">MUSIC OFF</button>
+      <button data-cmd="reset confirm" class="danger" data-confirm="Reset ALL scores to 0?">RESET</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>FLASH A MESSAGE ON SCREEN</h2>
+    <form class="row" data-prefix="msg ">
+      <input name="t" placeholder="e.g. 5 MINUTE BREAK" maxlength="120" />
+      <button>SHOW</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>SET ROUND NAME</h2>
+    <form class="row" data-prefix="round ">
+      <input name="t" placeholder="e.g. Trivia, or 3" maxlength="60" />
+      <button>SET</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>TYPE A COMMAND (same as texting)</h2>
+    <form class="row" data-prefix="">
+      <input name="t" placeholder="A +10, Hamza +5, set C 120" />
+      <button>SEND</button>
+    </form>
+    <p class="help" style="margin-top:10px">
+      <code>A +10</code> <code>B -5</code> <code>C 25</code> <code>A +10, D +5</code> <code>Hamza +5</code> <code>set A 100</code>
+      <code>undo</code> <code>scores</code> <code>round 3</code> <code>msg Halftime!</code> <code>rename A The Lions</code>
+      <code>winner</code> <code>clear</code> <code>music on</code> <code>reset confirm</code>
+      · <a href="/" target="_blank">Open display ↗</a>
+    </p>
+  </div>
+
+  <div class="reply" id="reply"></div>
+
+  <script>
+    'use strict';
+    const $ = (s) => document.querySelector(s);
+    let pin = '';
+    try { pin = localStorage.getItem('gn-pin') || ''; } catch {}
+    let state = null;
+    let roundNo = 1;
+
+    async function send(text) {
+      const res = await fetch('api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin, text }) });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) { lock('Wrong PIN'); return null; }
+      toast(data.reply || data.error || 'Error', !res.ok);
+      if (navigator.vibrate) navigator.vibrate(20);
+      return data;
+    }
+
+    let toastTimer;
+    function toast(msg, err) {
+      const r = $('#reply');
+      r.textContent = msg; r.classList.toggle('err', !!err); r.classList.add('on');
+      clearTimeout(toastTimer); toastTimer = setTimeout(() => r.classList.remove('on'), 3500);
+    }
+
+    function lock(msg) {
+      $('#lock').style.display = '';
+      $('#lockMsg').textContent = msg || '';
+      $('#pin').value = ''; $('#pin').focus();
+    }
+
+    $('#lockForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      pin = $('#pin').value.trim();
+      const res = await fetch('api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin, text: 'scores' }) });
+      if (res.status === 401) return lock('Wrong PIN');
+      try { localStorage.setItem('gn-pin', pin); } catch {}
+      $('#lock').style.display = 'none';
+    });
+
+    function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+
+    function renderTeams() {
+      const ranked = [...state.teams].sort((a, b) => b.score - a.score);
+      const el = $('#teams');
+      if (!el.children.length) {
+        el.innerHTML = state.teams.map((t) => `
+          <div class="team" style="--c:${t.color}" data-id="${t.id}">
+            <div class="team-top"><div><div class="team-name"></div><div class="team-rank"></div></div><div class="team-score"></div></div>
+            <div class="members">${t.members.map(esc).join(' · ')}</div>
+            <div class="btns">
+              ${[1, 5, 10, 25].map((n) => `<button class="plus" data-cmd="${t.id} +${n}">+${n}</button>`).join('')}
+              ${[1, 5, 10, 25].map((n) => `<button class="minus" data-cmd="${t.id} -${n}">−${n}</button>`).join('')}
+            </div>
+            <form class="custom" data-prefix="${t.id} "><input name="t" inputmode="numeric" placeholder="+50 or -15" /><button>GO</button></form>
+          </div>`).join('');
+      }
+      for (const t of state.teams) {
+        const card = el.querySelector(`[data-id="${t.id}"]`);
+        card.querySelector('.team-name').textContent = t.name;
+        card.querySelector('.team-score').textContent = t.score;
+        const rank = 1 + state.teams.filter((x) => x.score > t.score).length;
+        card.querySelector('.team-rank').textContent = `RANK ${rank}`;
+      }
+      const m = /^ROUND (\d+)$/.exec(state.round);
+      roundNo = m ? +m[1] : roundNo;
+    }
+
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-cmd]');
+      if (!b) return;
+      if (b.dataset.confirm && !confirm(b.dataset.confirm)) return;
+      let cmd = b.dataset.cmd;
+      if (cmd === 'round next') cmd = 'round ' + (roundNo + 1);
+      send(cmd);
+    });
+
+    document.addEventListener('submit', (e) => {
+      const f = e.target;
+      if (!('prefix' in f.dataset)) return;
+      e.preventDefault();
+      let v = f.t.value.trim();
+      if (!v) return;
+      if (f.classList.contains('custom') && /^\d+$/.test(v)) v = '+' + v;
+      send(f.dataset.prefix + v);
+      f.t.value = '';
+    });
+
+    const es = new EventSource('events');
+    es.onopen = () => { $('#conn').className = 'ok'; $('#conn').lastChild.textContent = 'LIVE'; };
+    es.onerror = () => { $('#conn').className = ''; $('#conn').lastChild.textContent = 'RECONNECTING'; };
+    es.onmessage = (m) => { state = JSON.parse(m.data).state; renderTeams(); };
+
+    if (pin) $('#lock').style.display = 'none'; else lock();
+  </script>
+</body>
+</html>

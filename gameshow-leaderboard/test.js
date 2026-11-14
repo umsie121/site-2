@@ -1,0 +1,38 @@
+'use strict';
+const assert = require('assert');
+const { parseMessage } = require('./commands');
+const teams = require('./teams.json').teams;
+const p = (s) => parseMessage(s, teams);
+const one = (s) => p(s)[0];
+
+assert.deepStrictEqual(one('A +10'), { type: 'score', team: 'A', delta: 10, player: null });
+assert.deepStrictEqual(one('a+10'), { type: 'score', team: 'A', delta: 10, player: null });
+assert.deepStrictEqual(one('Team B -5'), { type: 'score', team: 'B', delta: -5, player: null });
+assert.deepStrictEqual(one('c 25'), { type: 'score', team: 'C', delta: 25, player: null });
+assert.deepStrictEqual(one('D minus 3'), { type: 'score', team: 'D', delta: -3, player: null });
+assert.deepStrictEqual(one('+15 to A'), { type: 'score', team: 'A', delta: 15, player: null });
+assert.deepStrictEqual(one('10 points team c'), { type: 'score', team: 'C', delta: 10, player: null });
+assert.deepStrictEqual(one('Hamza +5'), { type: 'score', team: 'A', delta: 5, player: 'Hamza' });
+assert.deepStrictEqual(one('ambreen 20'), { type: 'score', team: 'C', delta: 20, player: 'Ambreen' });
+assert.strictEqual(p('A +10, D +5\nB -2').length, 3);
+assert.strictEqual(p('A +10 and C +5')[1].team, 'C');
+assert.deepStrictEqual(one('set A 100'), { type: 'set', team: 'A', value: 100 });
+assert.deepStrictEqual(one('B = 40'), { type: 'set', team: 'B', value: 40 });
+assert.strictEqual(one('UNDO').type, 'undo');
+assert.strictEqual(one('scores').type, 'scores');
+assert.strictEqual(one('help').type, 'help');
+assert.deepStrictEqual(one('round 3'), { type: 'round', text: 'ROUND 3' });
+assert.deepStrictEqual(one('Round Trivia, music'), { type: 'round', text: 'Trivia, music' });
+assert.deepStrictEqual(one('msg Halftime, grab snacks!'), { type: 'message', text: 'Halftime, grab snacks!' });
+assert.deepStrictEqual(one('rename A The Lions'), { type: 'rename', team: 'A', name: 'The Lions' });
+assert.strictEqual(one('reset').error !== undefined, true);
+assert.strictEqual(one('reset confirm').type, 'reset');
+assert.deepStrictEqual(one('music on'), { type: 'music', on: true });
+assert.strictEqual(one('winner').type, 'winner');
+assert.ok(one('E +5').error);
+assert.ok(one('banana').error);
+// renamed teams still resolve by new name
+const renamed = teams.map((t) => (t.id === 'A' ? { ...t, name: 'The Lions' } : t));
+assert.strictEqual(parseMessage('lions +5', renamed)[0].team, 'A');
+assert.strictEqual(parseMessage('The Lions +5', renamed)[0].team, 'A');
+console.log('All command parser tests passed');
