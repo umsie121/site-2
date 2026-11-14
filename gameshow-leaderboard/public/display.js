@@ -28,6 +28,7 @@
     el.className = 'row';
     el.style.setProperty('--c', team.color);
     el.style.setProperty('--i', i);
+    el.dataset.team = team.id;
     el.innerHTML = `
       <div class="row-glow"></div>
       <div class="rank"><span class="rank-n">1</span><sup>ST</sup></div>
@@ -99,6 +100,12 @@
     if (roundEl.textContent !== state.round) {
       roundEl.textContent = state.round;
       roundEl.classList.remove('flash'); void roundEl.offsetWidth; roundEl.classList.add('flash');
+    }
+    const gameEl = $('#game');
+    const g = state.game || '';
+    if (gameEl.textContent !== g) {
+      gameEl.textContent = g;
+      gameEl.classList.remove('flash'); void gameEl.offsetWidth; gameEl.classList.add('flash');
     }
     renderTicker();
   }
@@ -276,16 +283,22 @@
     });
   }
 
-  function winnerFinale(teamId) {
+  function winnerFinale() {
     enqueue(async () => {
       winnerUp = true;
-      const order = sorted(state.teams);
-      const tied = order.filter((t) => t.score === order[0].score);
       showTakeover({ color: '#ffffff', kicker: 'THE RESULTS ARE IN', main: '. . .', sticky: true });
-      GameAudio.sfx.drumroll(2.6);
-      await sleep(2700);
+      const stopRoll = GameAudio.sfx.drumrollLoop();
+      const started = performance.now();
+      // The announcer builds suspense over the drumroll, then names the champion.
+      const ann = await Announcer.waitForWinner(9000);
+      if (ann) await Announcer.playLine(ann, 0, 'AND THE WINNER IS');
+      const elapsed = performance.now() - started;
+      if (elapsed < 2800) await sleep(2800 - elapsed);
+      stopRoll();
       GameAudio.sfx.impact();
       GameAudio.sfx.fanfare(true);
+      const order = sorted(state.teams);
+      const tied = order.filter((t) => t.score === order[0].score);
       if (tied.length > 1) {
         confettiColors = tied.map((t) => t.color).concat('#ffffff');
         showTakeover({ color: '#ffd34d', kicker: "IT'S A TIE!", main: tied.map((t) => t.name).join(' & '), sub: `${fmt(order[0].score)} POINTS EACH`, sticky: true });
@@ -293,11 +306,19 @@
         const t = order[0];
         confettiColors = [t.color, '#ffd34d', '#ffffff', t.color];
         showTakeover({ color: t.color, kicker: '🏆 AND THE WINNER IS 🏆', main: t.name, sub: t.members.join(' · '), sticky: true });
-        const rect = innerWidth / 2;
-        burst(rect, innerHeight / 2, t.color, 260, 2);
-        burst(rect, innerHeight / 2, '#ffd34d', 160, 1.6);
+        burst(innerWidth / 2, innerHeight / 2, t.color, 260, 2);
+        burst(innerWidth / 2, innerHeight / 2, '#ffd34d', 160, 1.6);
       }
       confettiUntil = performance.now() + 60000;
+      GameAudio.sfx.applause(6, 1.6);
+      setTimeout(() => GameAudio.sfx.airhorn(), 400);
+      if (ann) {
+        await sleep(1400);
+        await Announcer.playLine(ann, 1, 'CHAMPIONS');
+        GameAudio.sfx.applause(5, 1.4);
+        await sleep(1500);
+        Announcer.finish();
+      }
     });
   }
 
@@ -335,7 +356,10 @@
         case 'leader': leaderTakeover(e.team); break;
         case 'round': GameAudio.sfx.round(); enqueue(() => showBanner(e.text, 3600)); break;
         case 'message': GameAudio.sfx.message(); enqueue(() => showBanner(e.text, 6000)); break;
-        case 'winner': winnerFinale(e.team); break;
+        case 'winner': winnerFinale(); break;
+        case 'announce': Announcer.handle(e); break;
+        case 'voice': Announcer.setEnabled(e.on); syncDock(); break;
+        case 'game': enqueue(() => showBanner('NOW PLAYING: ' + e.text, 3600)); break;
         case 'clear': clearOverlays(); GameAudio.sfx.whoosh(); break;
         case 'undo': case 'reset': case 'rename': GameAudio.sfx.whoosh(); break;
         case 'music': GameAudio.setMusic(e.on); syncDock(); break;
@@ -357,7 +381,8 @@
     $('b', btnMusic).textContent = GameAudio.musicOn ? 'ON' : 'OFF';
     $('b', btnSfx).textContent = GameAudio.sfxOn ? 'ON' : 'OFF';
     $('b', btnTrack).textContent = GameAudio.mode === 'file' ? 'MP3' : 'SYNTH';
-    try { localStorage.setItem('gn-audio', JSON.stringify({ music: GameAudio.musicOn, sfx: GameAudio.sfxOn, vol: $('#vol').value })); } catch {}
+    $('#btnVoice b').textContent = Announcer.enabled ? 'ON' : 'OFF';
+    try { localStorage.setItem('gn-audio', JSON.stringify({ music: GameAudio.musicOn, sfx: GameAudio.sfxOn, vol: $('#vol').value, voice: Announcer.enabled, voiceVol: $('#voiceVol').value })); } catch {}
   }
 
   function testFx() {
@@ -380,6 +405,8 @@
     if (act === 'music') GameAudio.setMusic(!GameAudio.musicOn);
     if (act === 'sfx') GameAudio.setSfx(!GameAudio.sfxOn);
     if (act === 'test') testFx();
+    if (act === 'voice') Announcer.setEnabled(!Announcer.enabled);
+    if (act === 'testvoice') Announcer.test();
     if (act === 'full') toggleFull();
     if (act === 'load') $('#file').click();
     if (act === 'track') {
@@ -396,6 +423,7 @@
     syncDock();
   });
   $('#vol').addEventListener('input', (e) => { GameAudio.setVolume(e.target.value / 100); syncDock(); });
+  $('#voiceVol').addEventListener('input', (e) => { GameAudio.setVoiceVolume(e.target.value / 100); syncDock(); });
 
   addEventListener('keydown', (e) => {
     if (!started) return;
@@ -404,6 +432,8 @@
     if (k === 'm') GameAudio.setMusic(!GameAudio.musicOn);
     if (k === 's') GameAudio.setSfx(!GameAudio.sfxOn);
     if (k === 't') testFx();
+    if (k === 'a') Announcer.setEnabled(!Announcer.enabled);
+    if (k === 'v') Announcer.test();
     if (k === 'escape') clearOverlays();
     syncDock();
   });
@@ -432,6 +462,9 @@
     if (prefs.vol) { $('#vol').value = prefs.vol; }
     GameAudio.setVolume($('#vol').value / 100);
     if (prefs.sfx === false) GameAudio.setSfx(false);
+    if (prefs.voiceVol) $('#voiceVol').value = prefs.voiceVol;
+    GameAudio.setVoiceVolume($('#voiceVol').value / 100);
+    Announcer.setEnabled(prefs.voice !== false && state?.voice !== false);
     // optional bundled track: drop a file named music.mp3 into /public
     fetch('music.mp3', { method: 'HEAD' }).then((r) => { if (r.ok) { GameAudio.loadFile('music.mp3'); syncDock(); } }).catch(() => {});
     if (prefs.music) GameAudio.setMusic(true);

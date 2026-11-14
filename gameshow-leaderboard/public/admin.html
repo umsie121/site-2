@@ -68,6 +68,11 @@
       <button data-cmd="winner" class="gold">🏆 WINNER</button>
       <button data-cmd="clear">CLEAR SCREEN</button>
     </div>
+    <div class="row" style="margin-bottom:6px">
+      <button data-cmd="hype" class="gold">🎙 HYPE RECAP</button>
+      <button data-cmd="voice on">ANNOUNCER ON</button>
+      <button data-cmd="voice off">ANNOUNCER OFF</button>
+    </div>
     <div class="row">
       <button data-cmd="music on">♫ MUSIC ON</button>
       <button data-cmd="music off">MUSIC OFF</button>
@@ -80,6 +85,22 @@
     <form class="row" data-prefix="msg ">
       <input name="t" placeholder="e.g. 5 MINUTE BREAK" maxlength="120" />
       <button>SHOW</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>🎙 MAKE THE ANNOUNCER SAY…</h2>
+    <form class="row" data-prefix="say ">
+      <input name="t" placeholder="e.g. Hamza, you are on thin ice!" maxlength="300" />
+      <button>SAY</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>NOW PLAYING (GAME NAME)</h2>
+    <form class="row" data-prefix="game ">
+      <input name="t" placeholder="e.g. Charades, Pictionary, Family Feud" maxlength="40" />
+      <button>SET</button>
     </form>
   </div>
 
@@ -100,6 +121,7 @@
     <p class="help" style="margin-top:10px">
       <code>A +10</code> <code>B -5</code> <code>C 25</code> <code>A +10, D +5</code> <code>Hamza +5</code> <code>set A 100</code>
       <code>undo</code> <code>scores</code> <code>round 3</code> <code>msg Halftime!</code> <code>rename A The Lions</code>
+      <code>game Charades</code> <code>say Hello!</code> <code>hype</code> <code>voice off</code>
       <code>winner</code> <code>clear</code> <code>music on</code> <code>reset confirm</code>
       · <a href="/" target="_blank">Open display ↗</a>
     </p>

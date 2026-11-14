@@ -28,6 +28,10 @@ assert.deepStrictEqual(one('rename A The Lions'), { type: 'rename', team: 'A', n
 assert.strictEqual(one('reset').error !== undefined, true);
 assert.strictEqual(one('reset confirm').type, 'reset');
 assert.deepStrictEqual(one('music on'), { type: 'music', on: true });
+assert.deepStrictEqual(one('say Hamza, you are on thin ice!'), { type: 'say', text: 'Hamza, you are on thin ice!' });
+assert.deepStrictEqual(one('game Charades, round two'), { type: 'game', text: 'Charades, round two' });
+assert.deepStrictEqual(one('voice off'), { type: 'voice', on: false });
+assert.strictEqual(one('hype').type, 'recap');
 assert.strictEqual(one('winner').type, 'winner');
 assert.ok(one('E +5').error);
 assert.ok(one('banana').error);

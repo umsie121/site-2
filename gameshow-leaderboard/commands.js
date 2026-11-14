@@ -11,7 +11,11 @@ const HELP = [
   'undo',
   'scores',
   'round 3  /  round Trivia',
-  'msg <text>  (flash on screen)',
+  'game Charades  (name the current game)',
+  'msg <text>  (flash on screen + announcer reads it)',
+  'say <text>  (announcer speaks it)',
+  'hype  (announcer recaps the standings)',
+  'voice on|off  (announcer)',
   'rename A The Lions',
   'winner  /  music on|off',
   'reset confirm',
@@ -70,11 +74,19 @@ function parseClause(raw, teams) {
   if (/^reset/.test(lower)) return { error: 'To wipe ALL scores text: reset confirm' };
   if (/^(winner|crown|finale|celebrate)$/.test(lower)) return { type: 'winner' };
   if (/^(clear|hide)( winner| msg| message| banner)?$/.test(lower)) return { type: 'clear' };
+  if (/^(hype|recap|commentary|standings recap|where are we)$/.test(lower)) return { type: 'recap' };
+  if ((m = lower.match(/^(?:voice|announcer|commentary|tts) (on|off)$/))) return { type: 'voice', on: m[1] === 'on' };
   if ((m = lower.match(/^music (on|off|play|stop|start|pause)$/))) {
     return { type: 'music', on: ['on', 'play', 'start'].includes(m[1]) };
   }
-  if ((m = text.match(/^(?:msg|message|say|announce|banner|show)[:\s]+(.+)$/i))) {
+  if ((m = text.match(/^(?:msg|message|banner|show)[:\s]+(.+)$/i))) {
     return { type: 'message', text: m[1].slice(0, 120) };
+  }
+  if ((m = text.match(/^(?:say|announce|speak)[:\s]+(.+)$/i))) {
+    return { type: 'say', text: m[1].slice(0, 300) };
+  }
+  if ((m = text.match(/^(?:game|now playing|next game)[:\s]+(.+)$/i))) {
+    return { type: 'game', text: m[1].trim().slice(0, 40) };
   }
   if ((m = text.match(/^round[:\s]+(.+)$/i))) {
     const r = m[1].trim();
@@ -119,7 +131,7 @@ function parseClause(raw, teams) {
 function parseMessage(body, teams) {
   const text = String(body || '').trim();
   if (!text) return [{ error: 'Empty message. Text HELP for commands.' }];
-  if (/^(msg|message|say|announce|banner|show|round|rename)\b/i.test(text)) {
+  if (/^(msg|message|say|announce|speak|banner|show|round|rename|game|now playing|next game)\b/i.test(text)) {
     return [parseClause(text, teams)];
   }
   return text

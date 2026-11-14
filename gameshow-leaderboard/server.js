@@ -11,6 +11,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { parseMessage, HELP } = require('./commands');
+const tts = require('./tts');
+const { createAnnouncer } = require('./announcer');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const ADMIN_PIN = process.env.ADMIN_PIN || '2580';
@@ -33,6 +35,8 @@ function freshState() {
     title: config.title,
     subtitle: config.subtitle,
     round: 'ROUND 1',
+    game: '',
+    voice: true,
     teams: config.teams.map((t) => ({ ...t, score: 0 })),
     feed: [], // recent events for the ticker
     undo: [], // snapshots of scores/names before each change
@@ -83,6 +87,7 @@ function leaderId() {
 function snapshot() {
   state.undo.push({
     round: state.round,
+    game: state.game,
     teams: state.teams.map((t) => ({ id: t.id, score: t.score, name: t.name })),
   });
   if (state.undo.length > 100) state.undo.shift();
@@ -113,12 +118,16 @@ setInterval(() => {
   for (const res of clients) res.write(': ping\n\n');
 }, 20000);
 
+const announcer = createAnnouncer({ getState: () => state, broadcast });
+
 // ---------------------------------------------------------- run commands
 function runText(text, source) {
   const actions = parseMessage(text, state.teams);
   const replies = [];
   const events = [];
   const before = leaderId();
+  const scoresBefore = state.teams.map((t) => ({ id: t.id, score: t.score }));
+  let undidScore = false;
 
   for (const a of actions) {
     if (a.error) {
@@ -160,7 +169,12 @@ function runText(text, source) {
           break;
         }
         state.round = snap.round;
-        for (const s of snap.teams) Object.assign(teamById(s.id), { score: s.score, name: s.name });
+        state.game = snap.game ?? state.game;
+        for (const s of snap.teams) {
+          const t = teamById(s.id);
+          if (t.score !== s.score) undidScore = true;
+          Object.assign(t, { score: s.score, name: s.name });
+        }
         addFeed('Last change undone', '#ffffff');
         events.push({ kind: 'undo' });
         replies.push('Undone.\n' + standingsText());
@@ -173,6 +187,7 @@ function runText(text, source) {
         t.name = a.name;
         addFeed(`${old} is now ${a.name}`, t.color);
         events.push({ kind: 'rename', team: t.id });
+        announcer.rename(old, a.name, t.id);
         replies.push(`Renamed to ${a.name}`);
         break;
       }
@@ -181,15 +196,39 @@ function runText(text, source) {
         state.round = a.text.toUpperCase();
         addFeed(state.round + ' begins', '#ffffff');
         events.push({ kind: 'round', text: state.round });
+        announcer.round(state.round);
         replies.push(`Now showing: ${state.round}`);
         break;
       case 'message':
         events.push({ kind: 'message', text: a.text });
+        announcer.message(a.text);
         replies.push('On screen: ' + a.text);
+        break;
+      case 'say':
+        announcer.say(a.text);
+        replies.push('Announcer: ' + a.text);
+        break;
+      case 'game':
+        snapshot();
+        state.game = a.text.toUpperCase();
+        addFeed(`Now playing: ${state.game}`, '#ffffff');
+        events.push({ kind: 'game', text: state.game });
+        announcer.game(a.text);
+        replies.push(`Now playing: ${state.game}`);
+        break;
+      case 'recap':
+        announcer.recap();
+        replies.push('Announcer is recapping the standings\n' + standingsText());
+        break;
+      case 'voice':
+        state.voice = a.on;
+        events.push({ kind: 'voice', on: a.on });
+        replies.push(`Announcer ${a.on ? 'on' : 'off'}`);
         break;
       case 'winner': {
         const lead = leaderId();
         events.push({ kind: 'winner', team: lead });
+        announcer.winner();
         replies.push(lead ? `Crowning ${teamById(lead).name}!` : 'It is a tie at the top! Showing finale anyway.');
         break;
       }
@@ -205,6 +244,7 @@ function runText(text, source) {
         snapshot();
         for (const t of state.teams) t.score = 0;
         state.round = 'ROUND 1';
+        state.game = '';
         state.feed = [];
         addFeed('Scores reset', '#ffffff');
         events.push({ kind: 'reset' });
@@ -222,6 +262,9 @@ function runText(text, source) {
     save();
     broadcast({ events, source });
   }
+  const scoreEvents = events.filter((e) => e.kind === 'score' && e.delta);
+  if (scoreEvents.length) announcer.scores(scoreEvents, scoresBefore);
+  if (undidScore) announcer.correction();
   console.log(`[${source}] ${JSON.stringify(text)} → ${replies.join(' | ').replace(/\n/g, ' / ')}`);
   return replies.join('\n\n') || 'OK';
 }
@@ -333,6 +376,13 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && route === '/healthz') return send(res, 200, 'ok');
 
+    if (req.method === 'GET' && route.startsWith('/api/tts/')) {
+      const audio = await tts.get(route.slice('/api/tts/'.length));
+      if (!audio) return send(res, 404, 'No audio');
+      res.writeHead(200, { 'Content-Type': audio.type, 'Content-Length': audio.buf.length, 'Cache-Control': 'private, max-age=3600' });
+      return res.end(audio.buf);
+    }
+
     if (req.method === 'POST' && route === '/api/command') {
       const body = parseBody(await readBody(req), req.headers['content-type']);
       if (!safeEqual(body.pin || '', ADMIN_PIN)) return send(res, 401, JSON.stringify({ error: 'Wrong PIN' }), 'application/json');
@@ -401,5 +451,6 @@ server.listen(PORT, () => {
   console.log(`  SMS hook: POST /sms`);
   if (!ALLOWED_NUMBERS.length) console.log('  ⚠  ALLOWED_NUMBERS not set: ANY phone can text score changes.');
   if (!TWILIO_AUTH_TOKEN) console.log('  ⚠  TWILIO_AUTH_TOKEN not set: Twilio signatures are not checked.');
+  console.log(`  🎙  Announcer: ${announcer.status()}`);
   console.log('');
 });

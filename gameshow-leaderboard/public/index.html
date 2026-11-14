@@ -25,6 +25,7 @@
     <div class="hud-left">
       <div class="live"><span class="dot"></span>LIVE</div>
       <div class="round" id="round">ROUND 1</div>
+      <div class="game" id="game"></div>
     </div>
     <div class="hud-center">
       <h1 class="title" id="title" data-text="GAMES NIGHT">GAMES NIGHT</h1>
@@ -45,6 +46,11 @@
 
   <!-- ======= overlays ======= -->
   <canvas id="fx"></canvas>
+  <div class="onair" id="onair">
+    <div class="onair-badge"><span class="onair-dot"></span><span id="onairLabel">LIVE COMMENTARY</span></div>
+    <div class="onair-text" id="onairText"></div>
+    <canvas class="onair-viz" id="onairViz"></canvas>
+  </div>
   <div class="takeover" id="takeover"><div class="takeover-inner"></div></div>
   <div class="banner" id="banner"><div class="banner-bar"><div class="banner-text"></div></div></div>
 
@@ -52,7 +58,7 @@
     <div class="start-inner">
       <div class="start-logo">GAMES NIGHT</div>
       <button class="start-btn" id="startBtn">▶ GO LIVE</button>
-      <div class="start-hint">Click to enable sound · <b>F</b> fullscreen · <b>M</b> music · <b>S</b> sound effects</div>
+      <div class="start-hint">Click to enable sound · <b>F</b> fullscreen · <b>M</b> music · <b>S</b> sound effects · <b>A</b> announcer</div>
     </div>
   </div>
 
@@ -62,12 +68,16 @@
     <button data-act="track" id="btnTrack" title="Switch between the built-in synth track and your own MP3">TRACK: <b>SYNTH</b></button>
     <button data-act="load" title="Use your own MP3 for background music">LOAD MP3</button>
     <button data-act="sfx" id="btnSfx" title="Sound effects (S)">SFX <b>ON</b></button>
+    <button data-act="voice" id="btnVoice" title="Announcer voice (A)">🎙 ANNOUNCER <b>ON</b></button>
+    <label class="vol" title="Announcer volume">VOICE <input type="range" id="voiceVol" min="0" max="150" value="100" /></label>
+    <button data-act="testvoice" title="Test the announcer (V)">TEST VOICE</button>
     <button data-act="test" title="Demo animation (T)">TEST FX</button>
     <button data-act="full" title="Fullscreen (F)">⛶ FULLSCREEN</button>
     <input type="file" id="file" accept="audio/*" hidden />
   </div>
 
   <script src="audio.js"></script>
+  <script src="announcer.js"></script>
   <script src="display.js"></script>
 </body>
 </html>
