@@ -16,7 +16,11 @@
     <div class="beam beam-l"></div>
     <div class="beam beam-r"></div>
     <div class="floor"><div class="grid"></div></div>
+    <div class="lasers" id="lasers">
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    </div>
     <canvas id="ambient"></canvas>
+    <div class="beatflash" id="beatflash"></div>
     <div class="vignette"></div>
   </div>
 
@@ -30,6 +34,11 @@
     <div class="hud-center">
       <h1 class="title" id="title" data-text="GAMES NIGHT">GAMES NIGHT</h1>
       <div class="subtitle" id="subtitle">THE ULTIMATE SHOWDOWN</div>
+      <div class="timer" id="timer">
+        <svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="44"/><circle class="prog" id="timerProg" cx="50" cy="50" r="44"/></svg>
+        <div class="timer-digits" id="timerDigits">0:00</div>
+        <div class="timer-label">TIME LEFT</div>
+      </div>
     </div>
     <div class="hud-right">
       <div class="clock" id="clock">00:00</div>
@@ -53,12 +62,18 @@
     <canvas class="onair-viz" id="onairViz"></canvas>
   </div>
   <div class="takeover" id="takeover"><div class="takeover-inner"></div></div>
+  <div class="flash" id="flash"></div>
+  <div class="urgent-frame" id="urgent"></div>
   <div class="banner" id="banner"><div class="banner-bar"><div class="banner-text"></div></div></div>
 
   <div class="start" id="start">
     <div class="start-inner">
       <div class="start-logo">GAMES NIGHT</div>
       <button class="start-btn" id="startBtn">▶ GO LIVE</button>
+      <div class="start-phone" id="startPhone" hidden>
+        <div class="qr" id="qr"></div>
+        <div><b>📱 Host control</b><span>Scan with your phone (same Wi-Fi)</span><code id="adminUrl"></code></div>
+      </div>
       <div class="start-hint">Click to enable sound · <b>F</b> fullscreen · <b>M</b> music · <b>S</b> sound effects · <b>A</b> announcer</div>
     </div>
   </div>
@@ -78,6 +93,7 @@
     <input type="file" id="file" accept="audio/*" multiple hidden />
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="audio.js"></script>
   <script src="announcer.js"></script>
   <script src="display.js"></script>

@@ -22,7 +22,21 @@ node server.js
 
 Twilio needs a **public URL**, so for the night deploy it (step 2). Running it locally works for the display and host panel on the same Wi-Fi.
 
-## 2. Deploy (about 5 minutes)
+## 📱 Easiest: control it from your phone over Wi-Fi (no Twilio needed)
+
+1. Start the server on the laptop. It prints a line like `📱 Phone (same Wi-Fi): http://192.168.1.23:4000/admin`. The **GO LIVE** screen also shows a QR code for it.
+2. Open that address on your phone (on the same Wi-Fi) and enter the PIN.
+3. Type or dictate what happened into **💬 Just tell me what happened**, in plain English:
+   - "Team C smashed charades, give them 50, Tasnim was MVP"
+   - "everyone gets 10 for showing up"
+   - "start a 60 second timer"
+   - "get the announcer to roast Team B, nicely"
+   - "oops, undo that"
+   - "who's winning?"
+
+Exact commands like `A +10` run instantly. Anything else goes to Claude, which turns it into scoreboard commands and shows you which ones it ran (`ANTHROPIC_API_KEY` is required for plain English). To dictate, use your phone keyboard's 🎤, or the 🎤 button where the browser supports it.
+
+## 2. Deploy (only needed for texting via Twilio)
 
 **Railway** (recommended) or **Render**: create a new project from this repo. Both detect Node and run `npm start`. Then set these environment variables:
 
@@ -74,6 +88,12 @@ What it does on its own:
 
 **Rough costs for a night:** Claude is about 1p per line. ElevenLabs is roughly 100–150 characters per line, so a few hundred lines fit within a low-tier monthly plan (check current pricing).
 
+## Pizzazz that happens automatically
+
+- **🔥 ON FIRE streaks:** when a team scores 3, 5 or 8 times in a row, there's a fire takeover, embers rise off their row, and they get an "ON FIRE ×N" badge until someone else scores. The announcer calls the streak.
+- **Lasers, screen shake and flashes** on big scores (25+), new leaders, streaks, intros and the winner reveal.
+- **Beat-synced stage:** the floor grid, stage lights and title pulse in time with the generated music.
+
 ## Music
 
 Six background tracks are generated live (no files, no licensing):
@@ -111,6 +131,8 @@ Tracks crossfade when you switch. You can also switch with the **TRACK** dropdow
 | `hype` | The announcer gives a dramatic recap of the standings |
 | `voice off` · `voice on` | Mutes or unmutes the announcer |
 | `rename A The Lions` | Renames a team (scoring by the new name works too) |
+| `intro` | 🎬 Cinematic team introductions: each team's name slams in, the players' names fly in, and the announcer introduces everyone |
+| `timer 60` · `timer 2m` · `timer stop` | ⏱ A countdown ring replaces the title, the music switches to Thinking Time, it beeps through the last 10 seconds with a red pulsing frame, then **TIME'S UP!** with a buzzer |
 | `winner` | Drumroll, then a full-screen winner reveal with confetti (handles ties) |
 | `clear` | Removes the winner screen or message |
 | `music on` · `music off` | Controls the background music on the projector remotely |
@@ -152,6 +174,7 @@ Edit `teams.json` to change team names, colours, members, the title or the subti
 server.js        HTTP server, SMS webhook, live updates (Server-Sent Events), persistence
 commands.js      text-command parser shared by SMS and the host panel
 announcer.js     commentary writer (Claude + template fallback), batching, moods
+hostbot.js       plain-English → commands (Claude, structured JSON output)
 tts.js           ElevenLabs / OpenAI text-to-speech with eager synthesis and caching
 teams.json       teams, colours, members, title
 public/index.html, display.css, display.js   projector display

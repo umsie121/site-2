@@ -37,6 +37,8 @@ const HELP = [
   'hype  (announcer recaps the standings)',
   'voice on|off  (announcer)',
   'rename A The Lions',
+  'intro  (cinematic team introductions)',
+  'timer 60  /  timer 2m  /  timer stop',
   'winner  /  music on|off',
   'music funk|tension|lounge|arcade|epic|synth|mp3|next',
   'reset confirm',
@@ -96,6 +98,14 @@ function parseClause(raw, teams) {
   if (/^(winner|crown|finale|celebrate)$/.test(lower)) return { type: 'winner' };
   if (/^(clear|hide)( winner| msg| message| banner)?$/.test(lower)) return { type: 'clear' };
   if (/^(hype|recap|commentary|standings recap|where are we)$/.test(lower)) return { type: 'recap' };
+  if (/^(intro|introductions?|meet the teams|opening|open the show)$/.test(lower)) return { type: 'intro' };
+  if (/^(?:timer|countdown|clock) (?:stop|off|cancel|clear|end)$/.test(lower) || /^(?:stop|cancel) (?:the )?(?:timer|countdown|clock)$/.test(lower)) return { type: 'timer', seconds: 0 };
+  if ((m = lower.match(/^(?:timer|countdown|clock|start timer)\s*(?:for\s+)?(\d+(?:\.\d+)?)\s*(s|sec|secs|seconds?|m|min|mins|minutes?)?$/))) {
+    const n = parseFloat(m[1]);
+    const secs = Math.round(/^m/.test(m[2] || '') ? n * 60 : n);
+    if (secs < 3 || secs > 3600) return { error: 'Timer must be between 3 seconds and 60 minutes' };
+    return { type: 'timer', seconds: secs };
+  }
   if ((m = lower.match(/^(?:voice|announcer|commentary|tts) (on|off)$/))) return { type: 'voice', on: m[1] === 'on' };
   if ((m = lower.match(/^(?:music|song|track)\s+(.+)$/)) && MUSIC_ALIASES[m[1].trim()]) {
     return { type: 'music', on: true, track: MUSIC_ALIASES[m[1].trim()] };

@@ -36,6 +36,13 @@ assert.deepStrictEqual(one('music funk'), { type: 'music', on: true, track: 'fun
 assert.deepStrictEqual(one('music thinking time'), { type: 'music', on: true, track: 'tension' });
 assert.deepStrictEqual(one('Music Next'), { type: 'music', on: true, track: 'next' });
 assert.deepStrictEqual(one('music off'), { type: 'music', on: false });
+assert.deepStrictEqual(one('timer 60'), { type: 'timer', seconds: 60 });
+assert.deepStrictEqual(one('timer 2m'), { type: 'timer', seconds: 120 });
+assert.deepStrictEqual(one('countdown 1.5 minutes'), { type: 'timer', seconds: 90 });
+assert.deepStrictEqual(one('timer stop'), { type: 'timer', seconds: 0 });
+assert.ok(one('timer 1').error);
+assert.strictEqual(one('intro').type, 'intro');
+assert.strictEqual(one('meet the teams').type, 'intro');
 assert.strictEqual(one('winner').type, 'winner');
 assert.ok(one('E +5').error);
 assert.ok(one('banana').error);

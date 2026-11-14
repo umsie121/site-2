@@ -13,6 +13,8 @@ const crypto = require('crypto');
 const { parseMessage, HELP, MUSIC_TRACKS } = require('./commands');
 const tts = require('./tts');
 const { createAnnouncer } = require('./announcer');
+const { createHostBot } = require('./hostbot');
+const os = require('os');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const ADMIN_PIN = process.env.ADMIN_PIN || '2580';
@@ -37,6 +39,8 @@ function freshState() {
     round: 'ROUND 1',
     game: '',
     voice: true,
+    timer: null, // { endsAt, total }
+    streak: null, // { team, count }
     teams: config.teams.map((t) => ({ ...t, score: 0 })),
     feed: [], // recent events for the ticker
     undo: [], // snapshots of scores/names before each change
@@ -53,6 +57,7 @@ try {
     const s = (saved.teams || []).find((x) => x.id === t.id) || {};
     return { ...t, name: s.name || t.name, score: Number(s.score) || 0 };
   });
+  state.timer = null;
   console.log('Loaded saved scores from', STATE_FILE);
 } catch (_) {
   /* first run */
@@ -71,7 +76,24 @@ function save() {
 
 function publicState() {
   const { undo, ...rest } = state;
-  return rest;
+  return { ...rest, now: Date.now() };
+}
+
+// ---------------------------------------------------------------- timer
+let timerHandle = null;
+function startTimer(seconds) {
+  clearTimeout(timerHandle);
+  if (!seconds) {
+    state.timer = null;
+    return;
+  }
+  state.timer = { endsAt: Date.now() + seconds * 1000, total: seconds };
+  timerHandle = setTimeout(() => {
+    state.timer = null;
+    save();
+    broadcast({ events: [{ kind: 'timeup' }], source: 'timer' });
+    announcer.timeUp();
+  }, seconds * 1000);
 }
 
 function ranking() {
@@ -119,6 +141,38 @@ setInterval(() => {
 }, 20000);
 
 const announcer = createAnnouncer({ getState: () => state, broadcast });
+const hostbot = createHostBot({ getState: () => state });
+
+// Plain English or exact commands. Exact commands run instantly; anything
+// else is translated by Claude into commands (when ANTHROPIC_API_KEY is set).
+async function handleChat(text, source) {
+  text = String(text || '').trim();
+  if (!text) return { reply: 'Say something!', commands: [] };
+  const parsed = parseMessage(text, state.teams);
+  if (parsed.length && parsed.every((a) => !a.error)) {
+    return { reply: runText(text, source), commands: [text] };
+  }
+  if (!hostbot.available) {
+    return { reply: parsed.find((a) => a.error).error + '\n(Add ANTHROPIC_API_KEY to use plain English.)', commands: [] };
+  }
+  let out;
+  try {
+    out = await hostbot.translate(text);
+  } catch (err) {
+    console.warn('[hostbot]', err.message);
+    return { reply: "Couldn't reach the AI just now. Try a direct command like A +10.", commands: [] };
+  }
+  console.log(`[hostbot] ${JSON.stringify(text)} → ${JSON.stringify(out.commands)}`);
+  const results = out.commands.map((c) => runText(c, source)).filter((r) => r && r !== 'OK');
+  return { reply: [out.reply, ...results].filter(Boolean).join('\n'), commands: out.commands };
+}
+
+function lanAddresses() {
+  return Object.values(os.networkInterfaces())
+    .flat()
+    .filter((i) => i && i.family === 'IPv4' && !i.internal)
+    .map((i) => i.address);
+}
 
 // ---------------------------------------------------------- run commands
 function runText(text, source) {
@@ -147,6 +201,10 @@ function runText(text, source) {
         t.score += a.delta;
         const sign = a.delta > 0 ? '+' : '';
         const who = a.player ? ` (${a.player})` : '';
+        if (a.delta > 0) {
+          state.streak = state.streak && state.streak.team === t.id ? { team: t.id, count: state.streak.count + 1 } : { team: t.id, count: 1 };
+          if (state.streak.count === 3 || state.streak.count === 5 || state.streak.count === 8) events.push({ kind: 'streak', team: t.id, count: state.streak.count });
+        }
         addFeed(`${t.name}${who} ${sign}${a.delta}`, t.color);
         events.push({ kind: 'score', team: t.id, delta: a.delta, player: a.player });
         replies.push(`${t.name}${who} ${sign}${a.delta} → ${t.score}`);
@@ -216,6 +274,17 @@ function runText(text, source) {
         announcer.game(a.text);
         replies.push(`Now playing: ${state.game}`);
         break;
+      case 'intro':
+        events.push({ kind: 'intro' });
+        announcer.intro();
+        replies.push('Rolling the team introductions!');
+        break;
+      case 'timer':
+        startTimer(a.seconds);
+        events.push({ kind: 'timer', timer: state.timer });
+        if (a.seconds) announcer.timerStart(a.seconds);
+        replies.push(a.seconds ? `Timer started: ${a.seconds >= 60 ? Math.floor(a.seconds / 60) + 'm ' + (a.seconds % 60 ? (a.seconds % 60) + 's' : '') : a.seconds + 's'}`.trim() : 'Timer stopped');
+        break;
       case 'recap':
         announcer.recap();
         replies.push('Announcer is recapping the standings\n' + standingsText());
@@ -245,6 +314,8 @@ function runText(text, source) {
         for (const t of state.teams) t.score = 0;
         state.round = 'ROUND 1';
         state.game = '';
+        state.streak = null;
+        startTimer(0);
         state.feed = [];
         addFeed('Scores reset', '#ffffff');
         events.push({ kind: 'reset' });
@@ -395,6 +466,17 @@ const server = http.createServer(async (req, res) => {
       return res.end(audio.buf);
     }
 
+    if (req.method === 'POST' && route === '/api/chat') {
+      const body = parseBody(await readBody(req), req.headers['content-type']);
+      if (!safeEqual(body.pin || '', ADMIN_PIN)) return send(res, 401, JSON.stringify({ error: 'Wrong PIN' }), 'application/json');
+      return send(res, 200, JSON.stringify(await handleChat(body.text, 'chat')), 'application/json');
+    }
+
+    if (req.method === 'GET' && route === '/api/info') {
+      const ips = lanAddresses();
+      return send(res, 200, JSON.stringify({ admin: ips.map((ip) => `http://${ip}:${PORT}/admin`), ai: hostbot.available }), 'application/json');
+    }
+
     if (req.method === 'POST' && route === '/api/command') {
       const body = parseBody(await readBody(req), req.headers['content-type']);
       if (!safeEqual(body.pin || '', ADMIN_PIN)) return send(res, 401, JSON.stringify({ error: 'Wrong PIN' }), 'application/json');
@@ -424,7 +506,7 @@ const server = http.createServer(async (req, res) => {
         console.warn('Ignored SMS from non-host number', from);
         reply = 'Sorry, only the hosts can update the scoreboard.';
       } else {
-        reply = runText(text, 'sms');
+        reply = (await handleChat(text, 'sms')).reply;
       }
 
       if (isTwilio) {
@@ -462,6 +544,8 @@ server.listen(PORT, () => {
   console.log(`  Display:  http://localhost:${PORT}/`);
   console.log(`  Admin:    http://localhost:${PORT}/admin   (PIN ${process.env.ADMIN_PIN ? 'from ADMIN_PIN' : ADMIN_PIN + ' — set ADMIN_PIN to change'})`);
   console.log(`  SMS hook: POST /sms`);
+  for (const ip of lanAddresses()) console.log(`  📱 Phone (same Wi-Fi): http://${ip}:${PORT}/admin`);
+  console.log(`  💬 Plain-English control: ${hostbot.available ? 'ON (Claude)' : 'off: set ANTHROPIC_API_KEY'}`);
   if (!ALLOWED_NUMBERS.length) console.log('  ⚠  ALLOWED_NUMBERS not set: ANY phone can text score changes.');
   if (!TWILIO_AUTH_TOKEN) console.log('  ⚠  TWILIO_AUTH_TOKEN not set: Twilio signatures are not checked.');
   console.log(`  🎙  Announcer: ${announcer.status()}`);

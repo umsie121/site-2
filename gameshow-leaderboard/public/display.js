@@ -33,7 +33,7 @@
       <div class="row-glow"></div>
       <div class="rank"><span class="rank-n">1</span><sup>ST</sup></div>
       <div class="info">
-        <div class="name-line"><div class="team-name"></div><div class="crown">👑</div></div>
+        <div class="name-line"><div class="team-name"></div><div class="crown">👑</div><div class="fire-badge"></div></div>
         <div class="members"></div>
         <div class="bar"><div class="bar-fill"></div></div>
       </div>
@@ -67,6 +67,10 @@
         .join('<i>•</i>');
       $('.bar-fill', r.el).style.width = Math.max(1.5, (Math.max(0, team.score) / max) * 100) + '%';
       r.el.classList.toggle('leader', team === top && !tieTop && top.score > 0);
+      const st = state.streak;
+      const fire = !!(st && st.team === team.id && st.count >= 3);
+      r.el.classList.toggle('onfire', fire);
+      if (fire) $('.fire-badge', r.el).textContent = `🔥 ON FIRE ×${st.count}`;
       countTo(r, team.score);
     });
   }
@@ -179,14 +183,27 @@
     }
   }
 
+  let fireRects = [], fireFrame = 0;
+  const EMBER = ['#ff6a00', '#ffb300', '#ff3d00', '#fff3b0'];
   function fxLoop() {
     fctx.clearRect(0, 0, innerWidth, innerHeight);
+    if (fireFrame++ % 20 === 0) fireRects = [...document.querySelectorAll('.row.onfire')].map((el) => el.getBoundingClientRect());
+    for (const r of fireRects) {
+      if (parts.length > 700) break;
+      for (let k = 0; k < 2; k++) parts.push({ kind: 'ember', x: r.left + Math.random() * r.width, y: r.bottom - 4, vx: (Math.random() - 0.5) * 1.2, vy: -1.2 - Math.random() * 2.2, life: 1, decay: 0.012 + Math.random() * 0.015, size: 1 + Math.random() * 2.2, color: EMBER[(Math.random() * 4) | 0] });
+    }
     if (performance.now() < confettiUntil && parts.length < 600) confetti(4);
     fctx.globalCompositeOperation = 'lighter';
     for (let i = parts.length - 1; i >= 0; i--) {
       const p = parts[i];
       p.x += p.vx; p.y += p.vy; p.life -= p.decay;
-      if (p.kind === 'spark') {
+      if (p.kind === 'ember') {
+        p.vx += (Math.random() - 0.5) * 0.3; p.vy *= 0.985;
+        fctx.globalCompositeOperation = 'lighter';
+        fctx.globalAlpha = Math.max(0, p.life);
+        const ez = (p.size * p.life + 0.5) * 6;
+        fctx.drawImage(glow(p.color), p.x - ez / 2, p.y - ez / 2, ez, ez);
+      } else if (p.kind === 'spark') {
         p.vx *= 0.96; p.vy = p.vy * 0.96 + 0.18;
         fctx.globalCompositeOperation = 'lighter';
         fctx.globalAlpha = Math.max(0, p.life);
@@ -244,6 +261,77 @@
     }
   }
 
+  // ------------------------------------------------------------ big-moment FX
+  let laserTimer = null;
+  function lasers(on, ms) {
+    const el = $('#lasers');
+    clearTimeout(laserTimer);
+    el.classList.toggle('on', !!on);
+    if (on && ms) laserTimer = setTimeout(() => el.classList.remove('on'), ms);
+  }
+  function slam(power = 1) {
+    const d = 0.9 * power;
+    const shake = [
+      { transform: 'translate(0,0)' }, { transform: `translate(${-d}vw, ${d * 0.6}vh)` }, { transform: `translate(${d}vw, ${-d * 0.5}vh)` },
+      { transform: `translate(${-d * 0.6}vw, ${-d * 0.3}vh)` }, { transform: `translate(${d * 0.3}vw, ${d * 0.2}vh)` }, { transform: 'translate(0,0)' },
+    ];
+    $('#board').animate(shake, { duration: 520, easing: 'ease-out' });
+    $('.hud').animate(shake, { duration: 520, easing: 'ease-out' });
+    $('#flash').animate([{ opacity: Math.min(0.7, 0.45 * power) }, { opacity: 0 }], { duration: 480, easing: 'ease-out' });
+  }
+  function onBeat(strength) {
+    if (document.hidden) return;
+    const k = strength === 2 ? 1 : 0.5;
+    $('#beatflash').animate([{ opacity: 0.85 * k }, { opacity: 0 }], { duration: 420, easing: 'ease-out' });
+    $('.floor').animate([{ opacity: Math.min(1, 0.55 + 0.4 * k) }, { opacity: 0.55 }], { duration: 380, easing: 'ease-out' });
+    if (strength === 2) $('.title').animate([{ filter: 'brightness(1.6)' }, { filter: 'brightness(1)' }], { duration: 300 });
+  }
+
+  // ------------------------------------------------------------ countdown timer
+  let timerEnd = null, timerTotal = 0, timerTick = null, lastSec = null, timeUpFor = null, prevTrack = null;
+  const RING = 276.5;
+  function setTimer(t) {
+    stopTimer(false);
+    if (!t) return;
+    timerEnd = Date.now() + (t.endsAt - state.now);
+    timerTotal = t.total * 1000;
+    lastSec = null;
+    document.body.classList.add('timing');
+    if (GameAudio.musicOn && GameAudio.track !== 'tension' && GameAudio.track !== 'mp3') { prevTrack = GameAudio.track; GameAudio.setTrack('tension'); }
+    timerTick = setInterval(updateTimer, 100);
+    updateTimer();
+  }
+  function updateTimer() {
+    const rem = Math.max(0, timerEnd - Date.now());
+    const secs = Math.ceil(rem / 1000);
+    const digits = $('#timerDigits');
+    digits.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+    $('#timerProg').style.strokeDashoffset = RING * (1 - rem / timerTotal);
+    if (secs !== lastSec) {
+      lastSec = secs;
+      if (secs <= 10 && secs > 0) {
+        document.body.classList.add('urgent');
+        GameAudio.sfx.beep(secs <= 3);
+        digits.classList.remove('tick'); void digits.offsetWidth; digits.classList.add('tick');
+      }
+    }
+    if (rem <= 0) timeUp();
+  }
+  function stopTimer(restore = true) {
+    clearInterval(timerTick); timerTick = null;
+    document.body.classList.remove('timing', 'urgent');
+    if (restore && prevTrack) { GameAudio.setTrack(prevTrack); prevTrack = null; }
+  }
+  function timeUp() {
+    if (timeUpFor === timerEnd || timerEnd === null) return;
+    timeUpFor = timerEnd;
+    stopTimer();
+    if (!started) return;
+    GameAudio.sfx.buzzer();
+    slam(1.4);
+    enqueue(() => showTakeover({ color: '#ff2a55', kicker: '⏱  ⏱  ⏱', main: "TIME'S UP!", ms: 2600 }));
+  }
+
   // ------------------------------------------------------------ takeovers
   const takeover = $('#takeover');
   async function showTakeover({ color, kicker, main, sub, ms = 4000, sticky = false }) {
@@ -277,6 +365,8 @@
       if (!t || winnerUp) return;
       GameAudio.sfx.impact();
       GameAudio.sfx.fanfare(false);
+      slam(1.2);
+      lasers(true, 5200);
       confettiColors = [t.color, '#ffffff', t.color, '#ffd34d'];
       confettiUntil = performance.now() + 2500;
       await showTakeover({ color: t.color, kicker: '★ NEW LEADER ★', main: t.name, sub: `${fmt(t.score)} POINTS`, ms: 4200 });
@@ -297,6 +387,8 @@
       stopRoll();
       GameAudio.sfx.impact();
       GameAudio.sfx.fanfare(true);
+      slam(1.6);
+      lasers(true);
       const order = sorted(state.teams);
       const tied = order.filter((t) => t.score === order[0].score);
       if (tied.length > 1) {
@@ -323,7 +415,61 @@
     });
   }
 
+  // Streak: a team scored 3 / 5 / 8 times in a row
+  function streakMoment(teamId, count) {
+    enqueue(async () => {
+      const t = teamOf(teamId);
+      if (!t || winnerUp) return;
+      GameAudio.sfx.fire();
+      lasers(true, 3200);
+      const r = rows.get(teamId);
+      if (r) { const b = r.el.getBoundingClientRect(); for (let i = 0; i < 6; i++) burst(b.left + Math.random() * b.width, b.bottom, EMBER[i % 4], 40, 1.2); }
+      await showTakeover({ color: '#ff6a00', kicker: `🔥 ${count} IN A ROW 🔥`, main: count >= 8 ? 'LEGENDARY!' : count >= 5 ? 'UNSTOPPABLE!' : 'ON FIRE!', sub: t.name, ms: 2600 });
+    });
+  }
+
+  // Cinematic team introductions, choreographed to the announcer's lines
+  function introSequence() {
+    enqueue(async () => {
+      lasers(true);
+      const ann = await Announcer.waitFor('intro', 8000);
+      const n = state.teams.length;
+      GameAudio.sfx.impact(); slam(1);
+      confettiColors = state.teams.map((t) => t.color).concat('#ffffff');
+      showTakeover({ color: '#ff2bd6', kicker: 'WELCOME TO', main: state.title, sub: state.subtitle, sticky: true });
+      if (ann) await Announcer.playLine(ann, 0, 'NOW INTRODUCING'); else await sleep(3000);
+      for (let i = 0; i < n; i++) {
+        const t = state.teams[i];
+        GameAudio.sfx.whoosh();
+        await sleep(280);
+        GameAudio.sfx.impact(); slam(0.8);
+        takeover.style.setProperty('--c', t.color);
+        takeover.firstElementChild.innerHTML = `<div class="to-rays"></div>
+          <div class="to-kicker">INTRODUCING</div>
+          <div class="to-main">${esc(t.name)}</div>
+          <div class="to-members">${t.members.map((m, k) => `<span style="animation-delay:${0.6 + k * 0.22}s">${esc(m)}</span>`).join('')}</div>`;
+        takeover.classList.add('on');
+        burst(innerWidth / 2, innerHeight * 0.45, t.color, 180, 1.6);
+        if (ann && ann.lines[i + 1]) await Announcer.playLine(ann, i + 1, 'NOW INTRODUCING'); else await sleep(3600);
+        GameAudio.sfx.applause(2.2, 0.9);
+        await sleep(600);
+      }
+      GameAudio.sfx.fanfare(true);
+      confettiUntil = performance.now() + 5000;
+      slam(1.3);
+      showTakeover({ color: '#ffd34d', kicker: '★ ★ ★', main: 'LET THE GAMES BEGIN!', sticky: true });
+      if (ann && ann.lines[n + 1]) await Announcer.playLine(ann, n + 1, 'LIVE COMMENTARY'); else await sleep(2600);
+      GameAudio.sfx.airhorn(); GameAudio.sfx.applause(4, 1.4);
+      await sleep(2200);
+      Announcer.finish();
+      takeover.classList.remove('on');
+      lasers(false);
+      await sleep(400);
+    });
+  }
+
   function clearOverlays() {
+    lasers(false);
     winnerUp = false;
     confettiUntil = 0;
     takeover.classList.remove('on');
@@ -339,7 +485,12 @@
     const highlight = scoreEv.find((e) => e.player)?.player;
     renderHud();
     render(highlight);
-    if (first || !started) return;
+    if (first) { if (state.timer) setTimer(state.timer); return; }
+    for (const e of events) {
+      if (e.kind === 'timer') setTimer(e.timer);
+      if (e.kind === 'timeup') timeUp();
+    }
+    if (!started) return;
 
     scoreEv.forEach((e, i) => {
       setTimeout(() => {
@@ -349,6 +500,7 @@
         r.el.classList.add(e.delta > 0 ? 'hit' : 'miss');
         popAt(e.team, e.delta, e.player);
         e.delta > 0 ? GameAudio.sfx.score(e.delta) : GameAudio.sfx.wrong();
+        if (e.delta >= 25) { slam(Math.min(1.5, e.delta / 40)); lasers(true, 3000); }
       }, i * 350);
     });
 
@@ -359,6 +511,8 @@
         case 'message': GameAudio.sfx.message(); enqueue(() => showBanner(e.text, 6000)); break;
         case 'winner': winnerFinale(); break;
         case 'announce': Announcer.handle(e); break;
+        case 'streak': streakMoment(e.team, e.count); break;
+        case 'intro': introSequence(); break;
         case 'voice': Announcer.setEnabled(e.on); syncDock(); break;
         case 'game': enqueue(() => showBanner('NOW PLAYING: ' + e.text, 3600)); break;
         case 'clear': clearOverlays(); GameAudio.sfx.whoosh(); break;
@@ -482,6 +636,7 @@
     GameAudio.setVoiceVolume($('#voiceVol').value / 100);
     Announcer.setEnabled(prefs.voice !== false && state?.voice !== false);
     GameAudio.onChange(syncDock);
+    GameAudio.onBeat(onBeat);
     if (prefs.track && prefs.track !== 'mp3') GameAudio.setTrack(prefs.track);
     // songs dropped into public/music/ become the "My MP3s" playlist
     fetch('api/music').then((r) => r.json()).then((list) => {
@@ -497,6 +652,16 @@
     if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
     keepAwake();
   });
+
+  // Start screen: QR code to open the host panel on a phone (same Wi-Fi)
+  fetch('api/info').then((r) => r.json()).then((info) => {
+    const url = info.admin && info.admin[0];
+    if (!url) return;
+    $('#adminUrl').textContent = url.replace(/^http:\/\//, '');
+    $('#startPhone').hidden = false;
+    if (window.QRCode) new QRCode($('#qr'), { text: url, width: 120, height: 120, colorDark: '#05060f', colorLight: '#ffffff' });
+    else $('#qr').remove();
+  }).catch(() => {});
 
   // ------------------------------------------------------------ boot
   const resize = () => { sizeCanvas(fx); sizeCanvas(amb); };

@@ -45,6 +45,20 @@
     .help { color: var(--dim); font-size: 14px; line-height: 1.5; }
     .help code { color: #9fe9ff; background: #0b0d24; padding: 1px 6px; border-radius: 4px; }
     a { color: #9fe9ff; }
+    .chat { background: linear-gradient(160deg, #1a1046, #10132e); border: 1px solid #5a2a8a; border-radius: 14px; padding: 12px; margin: 14px 0; box-shadow: 0 0 30px rgba(255, 43, 214, 0.15); }
+    .chat h2 { font: 600 11px 'Orbitron'; letter-spacing: 0.25em; color: #ff9cf0; margin-bottom: 8px; }
+    .log { max-height: 34vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+    .log:empty::before { content: 'Try: "Team C smashed charades, give them 50 and Tasnim was MVP" or "start a 60 second timer with tense music"'; color: var(--dim); font-size: 14px; line-height: 1.4; }
+    .msg { max-width: 85%; padding: 8px 11px; border-radius: 12px; font-size: 15px; line-height: 1.35; white-space: pre-wrap; }
+    .msg.me { align-self: flex-end; background: #2b1d63; border-bottom-right-radius: 3px; }
+    .msg.bot { align-self: flex-start; background: #0b0d24; border: 1px solid var(--line); border-bottom-left-radius: 3px; }
+    .msg.bot code { display: inline-block; margin: 3px 3px 0 0; font: 600 12px 'Orbitron'; color: #9fe9ff; background: #151a40; padding: 2px 6px; border-radius: 5px; }
+    .msg.wait { color: var(--dim); }
+    .chat form { display: flex; gap: 6px; }
+    .chat input { flex: 1; min-width: 0; font-size: 17px; }
+    .mic { width: 50px; font-size: 20px; padding: 0; }
+    .mic.on { background: #ff2a55; border-color: #ff2a55; animation: pulse 1s infinite; }
+    @keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(255, 42, 85, 0.3); } }
   </style>
 </head>
 <body>
@@ -58,6 +72,15 @@
   </div>
 
   <h1>GAMES NIGHT <small id="conn"><i></i>OFFLINE</small></h1>
+  <div class="chat">
+    <h2>💬 JUST TELL ME WHAT HAPPENED</h2>
+    <div class="log" id="log"></div>
+    <form id="chatForm" autocomplete="off">
+      <button type="button" class="mic" id="mic" hidden title="Dictate">🎤</button>
+      <input id="chatIn" placeholder="Type or dictate…" enterkeyhint="send" />
+      <button>SEND</button>
+    </form>
+  </div>
   <div class="teams" id="teams"></div>
 
   <div class="panel">
@@ -67,6 +90,13 @@
       <button data-cmd="round next">NEXT ROUND</button>
       <button data-cmd="winner" class="gold">🏆 WINNER</button>
       <button data-cmd="clear">CLEAR SCREEN</button>
+    </div>
+    <div class="row" style="margin-bottom:6px">
+      <button data-cmd="intro" class="gold">🎬 TEAM INTROS</button>
+      <button data-cmd="timer 30">⏱ 30s</button>
+      <button data-cmd="timer 60">⏱ 60s</button>
+      <button data-cmd="timer 120">⏱ 2m</button>
+      <button data-cmd="timer stop">STOP ⏱</button>
     </div>
     <div class="row" style="margin-bottom:6px">
       <button data-cmd="hype" class="gold">🎙 HYPE RECAP</button>
@@ -229,6 +259,49 @@
       send(f.dataset.prefix + v);
       f.t.value = '';
     });
+
+    // ---------------------------------------------------------- chat
+    const log = $('#log');
+    function bubble(cls, html) {
+      const d = document.createElement('div');
+      d.className = 'msg ' + cls; d.innerHTML = html;
+      log.appendChild(d); log.scrollTop = log.scrollHeight;
+      return d;
+    }
+    $('#chatForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = $('#chatIn').value.trim();
+      if (!text) return;
+      $('#chatIn').value = '';
+      bubble('me', esc(text));
+      const wait = bubble('bot wait', '…');
+      try {
+        const res = await fetch('api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin, text }) });
+        if (res.status === 401) { wait.remove(); return lock('Wrong PIN'); }
+        const data = await res.json();
+        wait.classList.remove('wait');
+        wait.innerHTML = esc(data.reply || 'Done') + (data.commands && data.commands.length ? '<br>' + data.commands.map((c) => `<code>${esc(c)}</code>`).join('') : '');
+        if (navigator.vibrate) navigator.vibrate(20);
+      } catch {
+        wait.textContent = 'Could not reach the laptop. Same Wi-Fi?';
+      }
+      log.scrollTop = log.scrollHeight;
+    });
+    // Dictation (Chrome / Android / some iPhones; otherwise use the keyboard mic)
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SR) {
+      const mic = $('#mic'); mic.hidden = false;
+      let rec = null;
+      mic.addEventListener('click', () => {
+        if (rec) { rec.stop(); return; }
+        rec = new SR(); rec.lang = 'en-GB'; rec.interimResults = true;
+        mic.classList.add('on');
+        rec.onresult = (ev) => { $('#chatIn').value = [...ev.results].map((r) => r[0].transcript).join(''); };
+        rec.onend = () => { mic.classList.remove('on'); rec = null; if ($('#chatIn').value.trim()) $('#chatForm').requestSubmit(); };
+        rec.onerror = () => { mic.classList.remove('on'); rec = null; };
+        rec.start();
+      });
+    }
 
     const es = new EventSource('events');
     es.onopen = () => { $('#conn').className = 'ok'; $('#conn').lastChild.textContent = 'LIVE'; };

@@ -100,6 +100,35 @@ const T = {
     () => `Rewind! The judges are changing that one!`,
     () => `Wait a minute! Let's run that back!`,
   ],
+  fire: [
+    (t, n) => `${t} are on fire! That's ${n} in a row!`,
+    (t, n) => `Somebody call the fire brigade, ${t} have scored ${n} times in a row!`,
+    (t, n) => `${n} in a row for ${t}! They are unstoppable!`,
+  ],
+  introOpen: [
+    () => `Ladies and gentlemen, welcome to Games Night! Teams, one trophy, and bragging rights forever. Let's meet our contenders!`,
+    () => `Good evening and welcome to the ultimate showdown! Put your hands together as we meet tonight's teams!`,
+  ],
+  introTeam: [
+    (t, m) => `Introducing ${t}! ${m}!`,
+    (t, m) => `Give it up for ${t}! Starring ${m}!`,
+    (t, m) => `Make some noise for ${t}! ${m}!`,
+    (t, m) => `Next up, it's ${t}! ${m}!`,
+  ],
+  introClose: [
+    () => `The stage is set. The stakes are high. Let the games begin!`,
+    () => `Four teams, one champion. Let's play!`,
+  ],
+  timerStart: [
+    (d) => `You have ${d} on the clock. Starting now!`,
+    (d) => `${d}! Your time starts now!`,
+    (d) => `The clock is ticking! ${d}, go go go!`,
+  ],
+  timeUp: [
+    () => `Time's up! Hands down, pens down!`,
+    () => `And that's time! Stop right there!`,
+    () => `Buzzer! Time is up!`,
+  ],
   suspense: [
     () => `Ladies and gentlemen, the scores are in. After a night of fierce competition, your Games Night champions are...`,
     () => `This is the moment we've all been waiting for. The winner of Games Night is...`,
@@ -251,6 +280,9 @@ function createAnnouncer({ getState, broadcast }) {
     else if (newLeader === null && now.length > 1) facts.push(`It's a TIE at the top between ${now.filter((t) => t.score === now[0].score).map((t) => t.name).join(' and ')}.`);
     else if (contested && gap <= 5) facts.push(`Very close race: only ${gap} points between first and second.`);
     else if (contested && gap >= 40) facts.push(`${now[0].name} are running away with it, ${gap} points clear.`);
+    const st = getState().streak;
+    const onFire = st && st.count >= 3 && net.get(st.team) > 0 ? st : null;
+    if (onFire) facts.push(`${team(onFire.team).name} are ON FIRE: ${onFire.count} scores in a row!`);
     if (comeback) facts.push(`${team(lastBefore.id).name} were in last place and have climbed off the bottom!`);
 
     // Template version
@@ -270,8 +302,9 @@ function createAnnouncer({ getState, broadcast }) {
     else if (contested && gap <= 5 && gap > 0) line += ' ' + pick(T.close)(now[0].name, now[1].name, gap);
     else if (contested && gap >= 40) line += ' ' + pick(T.runaway)(now[0].name, gap);
 
+    if (onFire && !leaderChanged) line += ' ' + pick(T.fire)(team(onFire.team).name, onFire.count);
     const text = await write(facts.join('\n'), line);
-    emit('score', mood, leaderChanged ? newLeader : bid, [{ text }]);
+    emit('score', onFire && mood === 'score' ? 'hype' : mood, leaderChanged ? newLeader : bid, [{ text }]);
   }
 
   // ---------------------------------------------------------- other moments
@@ -331,6 +364,23 @@ function createAnnouncer({ getState, broadcast }) {
           { text: reveal, mood: 'winner' },
         ]);
       });
+    },
+    intro() {
+      run(async () => {
+        const teams = getState().teams;
+        const lines = [{ text: pick(T.introOpen)(), mood: 'hype' }];
+        const variants = [...T.introTeam].sort(() => Math.random() - 0.5);
+        teams.forEach((t, i) => lines.push({ text: variants[i % variants.length](t.name, listNames(t.members)), mood: 'hype' }));
+        lines.push({ text: pick(T.introClose)(), mood: 'hype' });
+        emit('intro', 'intro', null, lines);
+      });
+    },
+    timerStart(seconds) {
+      const d = seconds >= 60 ? `${Math.floor(seconds / 60)} minute${seconds >= 120 ? 's' : ''}${seconds % 60 ? ` and ${seconds % 60} seconds` : ''}` : `${seconds} seconds`;
+      run(async () => emit('timer', 'say', null, [{ text: pick(T.timerStart)(d) }]));
+    },
+    timeUp() {
+      run(async () => emit('timeup', 'say', null, [{ text: pick(T.timeUp)() }]));
     },
     status() {
       return `${client ? `Claude ${MODEL}${useFast ? ' (fast)' : ''}` : 'built-in templates'} + ${tts.describe()}`;

@@ -292,6 +292,27 @@ const GameAudio = (() => {
         o.start(t0 + off); o.stop(t0 + off + len + 0.05);
       });
     },
+    // big game-show buzzer for TIME'S UP
+    buzzer() {
+      if (!ctx || !sfxOn) return;
+      duck(0.1, 1.8);
+      const t = now() + 0.01;
+      for (const f of [146.8, 155.6, 293.7]) tone({ type: 'square', freq: f, t, dur: 1.3, vol: 0.16, attack: 0.01, filter: { freq: 1800 } });
+      tone({ type: 'sawtooth', freq: 73.4, t, dur: 1.3, vol: 0.2, filter: { freq: 600 } });
+    },
+    // countdown beep (urgent = last 3 seconds)
+    beep(urgent = false) {
+      if (!ctx || !sfxOn) return;
+      tone({ type: 'square', freq: urgent ? 1320 : 990, dur: urgent ? 0.18 : 0.08, vol: urgent ? 0.09 : 0.05, filter: { freq: 4000 } });
+    },
+    // crackling flames for streaks
+    fire() {
+      if (!ctx || !sfxOn) return;
+      const t = now();
+      noise({ t, dur: 1.4, vol: 0.25, type: 'lowpass', freq: 600, to: 3000, attack: 0.3 });
+      for (let i = 0; i < 40; i++) noise({ t: t + Math.random() * 1.5, dur: 0.015, vol: 0.12 * Math.random(), type: 'highpass', freq: 3000, attack: 0.001 });
+      tone({ type: 'sine', freq: 80, glideTo: 220, t, dur: 0.9, vol: 0.35, attack: 0.2 });
+    },
     recordScratch() {
       if (!ctx || !sfxOn) return;
       duck(0.05, 1.2);
@@ -537,6 +558,10 @@ const GameAudio = (() => {
     if (!tr) return;
     while (nextTime < ctx.currentTime + 0.12) {
       try { tr.step(step, nextTime, S); } catch (e) { console.error(e); }
+      if (step % 4 === 0) {
+        const strength = step % 16 === 0 ? 2 : 1;
+        setTimeout(() => onBeat(strength), Math.max(0, (nextTime - ctx.currentTime) * 1000));
+      }
       nextTime += S;
       step++;
     }
@@ -571,6 +596,7 @@ const GameAudio = (() => {
   }
 
   let onChange = () => {};
+  let onBeat = () => {};
 
   function applyMusic() {
     if (!ctx) return;
@@ -646,5 +672,6 @@ const GameAudio = (() => {
     nextTrack,
     addFiles,
     onChange(fn) { onChange = fn; },
+    onBeat(fn) { onBeat = fn; },
   };
 })();

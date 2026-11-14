@@ -9,8 +9,8 @@ const Announcer = (() => {
   let enabled = true;
   const queue = [];
   let busy = false;
-  let pendingWinner = null;
-  let winnerWaiter = null;
+  const pending = {}; // type -> announcement waiting to be claimed
+  const waiters = {}; // type -> resolver
   let fakeLevel = 0; // drives the meter when using browser speech
 
   // -------------------------------------------------------------- loading
@@ -196,8 +196,9 @@ const Announcer = (() => {
     handle(ann) {
       if (!enabled || !GameAudio.ready) return;
       prepare(ann);
-      if (ann.type === 'winner') {
-        if (winnerWaiter) { winnerWaiter(ann); winnerWaiter = null; } else pendingWinner = ann;
+      // Sequences (winner reveal, team intros) are played by the display's choreography.
+      if (ann.type === 'winner' || ann.type === 'intro') {
+        if (waiters[ann.type]) { waiters[ann.type](ann); delete waiters[ann.type]; } else pending[ann.type] = ann;
         return;
       }
       queue.push(ann);
@@ -206,14 +207,15 @@ const Announcer = (() => {
       pump();
     },
     // The finale asks for the winner announcement and waits for it.
-    waitForWinner(ms) {
+    waitFor(type, ms) {
       if (!enabled) return Promise.resolve(null);
-      if (pendingWinner) { const a = pendingWinner; pendingWinner = null; return Promise.resolve(a); }
+      if (pending[type]) { const a = pending[type]; delete pending[type]; return Promise.resolve(a); }
       return new Promise((resolve) => {
-        winnerWaiter = resolve;
-        setTimeout(() => { if (winnerWaiter === resolve) { winnerWaiter = null; resolve(null); } }, ms);
+        waiters[type] = resolve;
+        setTimeout(() => { if (waiters[type] === resolve) { delete waiters[type]; resolve(null); } }, ms);
       });
     },
+    waitForWinner(ms) { return this.waitFor('winner', ms); },
     playLine,
     finish() { spotlight(null, false); hideBar(); },
     test() {
