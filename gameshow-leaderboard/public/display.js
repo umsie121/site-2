@@ -653,6 +653,19 @@
     keepAwake();
   });
 
+  // Keep sound alive: Chrome can pause audio after sleep or when the output
+  // device changes (e.g. starting AirPlay). Resume automatically; if the browser
+  // insists on a click, say so on screen instead of failing silently.
+  const soundWarn = $('#soundwarn');
+  async function checkSound() {
+    if (!started || !GameAudio.ready) return;
+    if (!GameAudio.running) await GameAudio.resume();
+    soundWarn.hidden = GameAudio.running;
+  }
+  setInterval(checkSound, 2000);
+  document.addEventListener('visibilitychange', checkSound);
+  ['pointerdown', 'keydown'].forEach((ev) => addEventListener(ev, () => { if (started) GameAudio.resume().then(checkSound); }, true));
+
   // Start screen: QR code to open the host panel on a phone (same Wi-Fi)
   fetch('api/info').then((r) => r.json()).then((info) => {
     const url = info.admin && info.admin[0];

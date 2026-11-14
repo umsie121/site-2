@@ -478,3 +478,10 @@ body.urgent .timer-digits { color: #ffd0d8; text-shadow: 0 0 18px #ff2a55; }
 .start-phone b { display: block; font: 1.5vw 'Bungee'; color: #fff; }
 .start-phone span { display: block; font: 600 1.1vw 'Rajdhani'; color: var(--dim); margin: 0.4vh 0 0.8vh; }
 .start-phone code { font: 700 1.2vw 'Orbitron'; color: #9fe9ff; }
+
+.soundwarn {
+  position: fixed; z-index: 120; top: 2vh; left: 50%; transform: translateX(-50%);
+  font: 700 1.3vw 'Orbitron'; letter-spacing: 0.12em; color: #fff; cursor: pointer;
+  padding: 1.2vh 2vw; border-radius: 99px; background: #ff2a55; box-shadow: 0 0 30px #ff2a55;
+  animation: blink 1.2s infinite;
+}

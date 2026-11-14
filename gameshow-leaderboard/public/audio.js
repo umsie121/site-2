@@ -667,6 +667,8 @@ const GameAudio = (() => {
     playVoice,
     get analyser() { return analyser; },
     get ready() { return !!ctx; },
+    get running() { return !!ctx && ctx.state === 'running'; },
+    resume() { return ctx ? ctx.resume().catch(() => {}) : Promise.resolve(); },
     setVolume(v) { musicVol = v; if (ctx && musicOn) musicBus.gain.setTargetAtTime(v * 0.9, now(), 0.1); },
     setTrack,
     nextTrack,
