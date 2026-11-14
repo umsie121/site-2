@@ -32,6 +32,10 @@ assert.deepStrictEqual(one('say Hamza, you are on thin ice!'), { type: 'say', te
 assert.deepStrictEqual(one('game Charades, round two'), { type: 'game', text: 'Charades, round two' });
 assert.deepStrictEqual(one('voice off'), { type: 'voice', on: false });
 assert.strictEqual(one('hype').type, 'recap');
+assert.deepStrictEqual(one('music funk'), { type: 'music', on: true, track: 'funk' });
+assert.deepStrictEqual(one('music thinking time'), { type: 'music', on: true, track: 'tension' });
+assert.deepStrictEqual(one('Music Next'), { type: 'music', on: true, track: 'next' });
+assert.deepStrictEqual(one('music off'), { type: 'music', on: false });
 assert.strictEqual(one('winner').type, 'winner');
 assert.ok(one('E +5').error);
 assert.ok(one('banana').error);

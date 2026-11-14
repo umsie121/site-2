@@ -74,6 +74,25 @@ What it does on its own:
 
 **Rough costs for a night:** Claude is about 1p per line. ElevenLabs is roughly 100–150 characters per line, so a few hundred lines fit within a low-tier monthly plan (check current pricing).
 
+## Music
+
+Six background tracks are generated live (no files, no licensing):
+
+| Text | Track | Good for |
+|---|---|---|
+| `music synth` | 🌆 Synthwave Showdown | Default high-tech vibe |
+| `music funk` | 🕺 Game Show Funk | Slap bass and brass stabs: classic TV game show |
+| `music tension` | ⏱ Thinking Time | Ticking clock and a heartbeat that gets more intense every few bars. For timed rounds |
+| `music lounge` | 🍸 Cocktail Lounge | Swinging jazz for breaks and food |
+| `music arcade` | 👾 8-Bit Arcade | Chiptune for quick-fire or video-game rounds |
+| `music epic` | 🏆 Grand Finale | Taiko drums and brass. It switches on automatically at the winner reveal if music is playing |
+| `music mp3` | 🎵 My MP3s | Your own songs as a playlist |
+| `music next` | ⏭ | Next track, or next song in your playlist |
+
+**Your own songs:** put `.mp3` or `.m4a` files in `public/music/` before starting the server (they become the "My MP3s" playlist), or use **+ ADD MP3s** in the projector's control bar to pick several at once. Songs play in order and loop.
+
+Tracks crossfade when you switch. You can also switch with the **TRACK** dropdown and **⏭ NEXT** in the control bar (or the **N** key), or with the **♫ MUSIC** buttons on the phone panel. The current track shows under the clock.
+
 ## 5. Text commands
 
 | Text | What happens |
@@ -95,6 +114,7 @@ What it does on its own:
 | `winner` | Drumroll, then a full-screen winner reveal with confetti (handles ties) |
 | `clear` | Removes the winner screen or message |
 | `music on` · `music off` | Controls the background music on the projector remotely |
+| `music funk` · `music tension` · `music next` … | Switches the background track (see Music above) |
 | `reset confirm` | Sets all scores to 0 (`undo` brings them back) |
 | `help` | Lists the commands |
 
@@ -113,7 +133,8 @@ Once it's running:
 1. Move the mouse to show the control dock:
    - **♫ MUSIC**: toggle the built-in synthwave track (or press **M**)
    - **VOL**: music volume. Sound effects automatically lower the music.
-   - **LOAD MP3**: use your own background track. Or put a file named `music.mp3` in `public/` to have it load automatically.
+   - **TRACK** / **⏭ NEXT**: pick a background track (**N** skips to the next one)
+   - **+ ADD MP3s**: add your own songs as a playlist (or put them in `public/music/`)
    - **SFX**: toggle sound effects (**S**)
    - **🎙 ANNOUNCER** and **VOICE**: turn the announcer on or off (**A**) and set its volume. **TEST VOICE** (**V**) plays a test line.
    - **TEST FX**: preview the animations (**T**)

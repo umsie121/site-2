@@ -310,6 +310,7 @@
         burst(innerWidth / 2, innerHeight / 2, '#ffd34d', 160, 1.6);
       }
       confettiUntil = performance.now() + 60000;
+      if (GameAudio.musicOn && GameAudio.track !== 'mp3') { GameAudio.setTrack('epic'); syncDock(); }
       GameAudio.sfx.applause(6, 1.6);
       setTimeout(() => GameAudio.sfx.airhorn(), 400);
       if (ann) {
@@ -362,7 +363,12 @@
         case 'game': enqueue(() => showBanner('NOW PLAYING: ' + e.text, 3600)); break;
         case 'clear': clearOverlays(); GameAudio.sfx.whoosh(); break;
         case 'undo': case 'reset': case 'rename': GameAudio.sfx.whoosh(); break;
-        case 'music': GameAudio.setMusic(e.on); syncDock(); break;
+        case 'music':
+          if (e.track === 'next') GameAudio.nextTrack();
+          else if (e.track) GameAudio.setTrack(e.track);
+          GameAudio.setMusic(e.on);
+          syncDock();
+          break;
       }
     }
   }
@@ -376,13 +382,24 @@
   }
 
   // ------------------------------------------------------------ controls
-  const btnMusic = $('#btnMusic'), btnSfx = $('#btnSfx'), btnTrack = $('#btnTrack');
+  const btnMusic = $('#btnMusic'), btnSfx = $('#btnSfx'), trackSel = $('#trackSel');
+  let lastNp = '';
+  function buildTrackList() {
+    const opts = GameAudio.tracks.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`);
+    if (GameAudio.playlist.length) opts.push(`<option value="mp3">My MP3s (${GameAudio.playlist.length})</option>`);
+    trackSel.innerHTML = opts.join('');
+    trackSel.value = GameAudio.track;
+  }
+  trackSel.innerHTML = '<option>Synthwave Showdown</option>';
+  trackSel.addEventListener('change', () => { GameAudio.setTrack(trackSel.value); if (!GameAudio.musicOn) GameAudio.setMusic(true); syncDock(); });
   function syncDock() {
     $('b', btnMusic).textContent = GameAudio.musicOn ? 'ON' : 'OFF';
     $('b', btnSfx).textContent = GameAudio.sfxOn ? 'ON' : 'OFF';
-    $('b', btnTrack).textContent = GameAudio.mode === 'file' ? 'MP3' : 'SYNTH';
+    if (trackSel.value !== GameAudio.track) buildTrackList();
+    const np = GameAudio.musicOn ? '♫ ' + GameAudio.nowPlaying.toUpperCase() : '';
+    if (np !== lastNp) { lastNp = np; const el = $('#np'); el.textContent = np; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
     $('#btnVoice b').textContent = Announcer.enabled ? 'ON' : 'OFF';
-    try { localStorage.setItem('gn-audio', JSON.stringify({ music: GameAudio.musicOn, sfx: GameAudio.sfxOn, vol: $('#vol').value, voice: Announcer.enabled, voiceVol: $('#voiceVol').value })); } catch {}
+    try { localStorage.setItem('gn-audio', JSON.stringify({ music: GameAudio.musicOn, sfx: GameAudio.sfxOn, vol: $('#vol').value, voice: Announcer.enabled, voiceVol: $('#voiceVol').value, track: GameAudio.track })); } catch {}
   }
 
   function testFx() {
@@ -409,17 +426,15 @@
     if (act === 'testvoice') Announcer.test();
     if (act === 'full') toggleFull();
     if (act === 'load') $('#file').click();
-    if (act === 'track') {
-      if (GameAudio.mode === 'synth' && !GameAudio.hasFile) $('#file').click();
-      else GameAudio.setMode(GameAudio.mode === 'synth' ? 'file' : 'synth');
-    }
+    if (act === 'next') { if (!GameAudio.musicOn) GameAudio.setMusic(true); GameAudio.nextTrack(); }
     syncDock();
   });
   $('#file').addEventListener('change', (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    GameAudio.loadFile(URL.createObjectURL(f));
+    const files = [...e.target.files];
+    if (!files.length) return;
+    GameAudio.addFiles(files.map((f) => ({ name: f.name.replace(/\.[^.]+$/, ''), src: URL.createObjectURL(f) })));
     GameAudio.setMusic(true);
+    buildTrackList();
     syncDock();
   });
   $('#vol').addEventListener('input', (e) => { GameAudio.setVolume(e.target.value / 100); syncDock(); });
@@ -430,6 +445,7 @@
     const k = e.key.toLowerCase();
     if (k === 'f') toggleFull();
     if (k === 'm') GameAudio.setMusic(!GameAudio.musicOn);
+    if (k === 'n') { if (!GameAudio.musicOn) GameAudio.setMusic(true); GameAudio.nextTrack(); }
     if (k === 's') GameAudio.setSfx(!GameAudio.sfxOn);
     if (k === 't') testFx();
     if (k === 'a') Announcer.setEnabled(!Announcer.enabled);
@@ -465,8 +481,14 @@
     if (prefs.voiceVol) $('#voiceVol').value = prefs.voiceVol;
     GameAudio.setVoiceVolume($('#voiceVol').value / 100);
     Announcer.setEnabled(prefs.voice !== false && state?.voice !== false);
-    // optional bundled track: drop a file named music.mp3 into /public
-    fetch('music.mp3', { method: 'HEAD' }).then((r) => { if (r.ok) { GameAudio.loadFile('music.mp3'); syncDock(); } }).catch(() => {});
+    GameAudio.onChange(syncDock);
+    if (prefs.track && prefs.track !== 'mp3') GameAudio.setTrack(prefs.track);
+    // songs dropped into public/music/ become the "My MP3s" playlist
+    fetch('api/music').then((r) => r.json()).then((list) => {
+      if (list.length) GameAudio.addFiles(list.map((f) => ({ name: f.name, src: f.url })), prefs.track === 'mp3' || !prefs.track);
+      buildTrackList(); syncDock();
+    }).catch(() => {});
+    buildTrackList();
     if (prefs.music) GameAudio.setMusic(true);
     syncDock();
     GameAudio.sfx.impact();

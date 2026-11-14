@@ -359,6 +359,9 @@ body.show-cursor .dock { opacity: 1; transform: none; pointer-events: auto; }
 }
 .dock button:hover { border-color: #00e5ff; box-shadow: 0 0 14px rgba(0, 229, 255, 0.4); }
 .dock b { color: #00e5ff; font-weight: 700; }
+.dock select { font: 600 13px 'Orbitron'; background: #0b0d24; color: #dfe6ff; border: 1px solid rgba(140, 160, 255, 0.35); border-radius: 6px; padding: 4px 6px; }
+.np { font: 600 0.95vw 'Orbitron'; letter-spacing: 0.2em; color: #ff9cf0; text-shadow: 0 0 8px rgba(255, 43, 214, 0.7); min-height: 1.2em; white-space: nowrap; }
+.np.flash { animation: roundIn 0.8s cubic-bezier(.2, 1.6, .4, 1); }
 .dock input[type=range] { width: 90px; accent-color: #ff2bd6; }
 
 /* ================================================================ announcer lower-third */

@@ -2,6 +2,26 @@
 // Turns a text message ("A +10", "Hamza +5", "undo", "msg Round 2!") into actions.
 // Shared by the SMS webhook and the admin panel so both behave identically.
 
+const MUSIC_TRACKS = {
+  synth: 'Synthwave Showdown',
+  funk: 'Game Show Funk',
+  tension: 'Thinking Time',
+  lounge: 'Cocktail Lounge',
+  arcade: '8-Bit Arcade',
+  epic: 'Grand Finale',
+  mp3: 'My MP3s',
+};
+const MUSIC_ALIASES = {
+  synth: 'synth', synthwave: 'synth', retro: 'synth', showdown: 'synth',
+  funk: 'funk', funky: 'funk', groove: 'funk', gameshow: 'funk', 'game show': 'funk', disco: 'funk',
+  tension: 'tension', thinking: 'tension', 'thinking time': 'tension', clock: 'tension', countdown: 'tension', suspense: 'tension', timer: 'tension',
+  lounge: 'lounge', jazz: 'lounge', jazzy: 'lounge', chill: 'lounge', break: 'lounge', relax: 'lounge', cocktail: 'lounge',
+  arcade: 'arcade', '8bit': 'arcade', '8-bit': 'arcade', chiptune: 'arcade', retro8: 'arcade', video: 'arcade', game: 'arcade',
+  epic: 'epic', finale: 'epic', 'grand finale': 'epic', cinematic: 'epic', drama: 'epic', dramatic: 'epic', final: 'epic',
+  mp3: 'mp3', mp3s: 'mp3', mine: 'mp3', playlist: 'mp3', songs: 'mp3', 'my music': 'mp3', 'my songs': 'mp3',
+  next: 'next', skip: 'next', change: 'next', shuffle: 'next',
+};
+
 const HELP = [
   'GAMES NIGHT commands:',
   'A +10  /  B -5  /  C 25',
@@ -18,6 +38,7 @@ const HELP = [
   'voice on|off  (announcer)',
   'rename A The Lions',
   'winner  /  music on|off',
+  'music funk|tension|lounge|arcade|epic|synth|mp3|next',
   'reset confirm',
 ].join('\n');
 
@@ -76,6 +97,9 @@ function parseClause(raw, teams) {
   if (/^(clear|hide)( winner| msg| message| banner)?$/.test(lower)) return { type: 'clear' };
   if (/^(hype|recap|commentary|standings recap|where are we)$/.test(lower)) return { type: 'recap' };
   if ((m = lower.match(/^(?:voice|announcer|commentary|tts) (on|off)$/))) return { type: 'voice', on: m[1] === 'on' };
+  if ((m = lower.match(/^(?:music|song|track)\s+(.+)$/)) && MUSIC_ALIASES[m[1].trim()]) {
+    return { type: 'music', on: true, track: MUSIC_ALIASES[m[1].trim()] };
+  }
   if ((m = lower.match(/^music (on|off|play|stop|start|pause)$/))) {
     return { type: 'music', on: ['on', 'play', 'start'].includes(m[1]) };
   }
@@ -140,4 +164,4 @@ function parseMessage(body, teams) {
     .filter(Boolean);
 }
 
-module.exports = { parseMessage, parseClause, resolveTeam, HELP };
+module.exports = { parseMessage, parseClause, resolveTeam, HELP, MUSIC_TRACKS };

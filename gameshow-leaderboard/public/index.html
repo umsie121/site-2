@@ -34,6 +34,7 @@
     <div class="hud-right">
       <div class="clock" id="clock">00:00</div>
       <div class="conn" id="conn"><span></span>CONNECTING</div>
+      <div class="np" id="np"></div>
     </div>
   </header>
 
@@ -65,15 +66,16 @@
   <div class="dock" id="dock">
     <button data-act="music" id="btnMusic" title="Background music (M)">♫ MUSIC <b>OFF</b></button>
     <label class="vol" title="Music volume">VOL <input type="range" id="vol" min="0" max="100" value="45" /></label>
-    <button data-act="track" id="btnTrack" title="Switch between the built-in synth track and your own MP3">TRACK: <b>SYNTH</b></button>
-    <button data-act="load" title="Use your own MP3 for background music">LOAD MP3</button>
+    <label class="vol" title="Background track">TRACK <select id="trackSel"></select></label>
+    <button data-act="next" title="Next track (N)">⏭ NEXT</button>
+    <button data-act="load" title="Add your own songs to a playlist">+ ADD MP3s</button>
     <button data-act="sfx" id="btnSfx" title="Sound effects (S)">SFX <b>ON</b></button>
     <button data-act="voice" id="btnVoice" title="Announcer voice (A)">🎙 ANNOUNCER <b>ON</b></button>
     <label class="vol" title="Announcer volume">VOICE <input type="range" id="voiceVol" min="0" max="150" value="100" /></label>
     <button data-act="testvoice" title="Test the announcer (V)">TEST VOICE</button>
     <button data-act="test" title="Demo animation (T)">TEST FX</button>
     <button data-act="full" title="Fullscreen (F)">⛶ FULLSCREEN</button>
-    <input type="file" id="file" accept="audio/*" hidden />
+    <input type="file" id="file" accept="audio/*" multiple hidden />
   </div>
 
   <script src="audio.js"></script>

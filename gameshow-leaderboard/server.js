@@ -10,7 +10,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { parseMessage, HELP } = require('./commands');
+const { parseMessage, HELP, MUSIC_TRACKS } = require('./commands');
 const tts = require('./tts');
 const { createAnnouncer } = require('./announcer');
 
@@ -237,8 +237,8 @@ function runText(text, source) {
         replies.push('Screen cleared');
         break;
       case 'music':
-        events.push({ kind: 'music', on: a.on });
-        replies.push(`Music ${a.on ? 'on' : 'off'}`);
+        events.push({ kind: 'music', on: a.on, track: a.track || null });
+        replies.push(a.track ? (a.track === 'next' ? 'Skipping to the next track' : `Now playing: ${MUSIC_TRACKS[a.track]}`) : `Music ${a.on ? 'on' : 'off'}`);
         break;
       case 'reset':
         snapshot();
@@ -277,6 +277,8 @@ const MIME = {
   '.mp3': 'audio/mpeg',
   '.ogg': 'audio/ogg',
   '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
@@ -376,6 +378,16 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && route === '/healthz') return send(res, 200, 'ok');
 
+    if (req.method === 'GET' && route === '/api/music') {
+      let files = [];
+      try {
+        files = fs.readdirSync(path.join(PUBLIC_DIR, 'music')).filter((f) => /\.(mp3|m4a|ogg|wav|aac)$/i.test(f)).sort();
+      } catch (_) {}
+      const list = files.map((f) => ({ name: f.replace(/\.[^.]+$/, ''), url: 'music/' + encodeURIComponent(f) }));
+      if (fs.existsSync(path.join(PUBLIC_DIR, 'music.mp3'))) list.unshift({ name: 'music', url: 'music.mp3' });
+      return send(res, 200, JSON.stringify(list), 'application/json');
+    }
+
     if (req.method === 'GET' && route.startsWith('/api/tts/')) {
       const audio = await tts.get(route.slice('/api/tts/'.length));
       if (!audio) return send(res, 404, 'No audio');
@@ -428,6 +440,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' || req.method === 'HEAD') {
       let file = route === '/' ? '/index.html' : route === '/admin' ? '/admin.html' : route;
+      try { file = decodeURIComponent(file); } catch { return send(res, 400, 'Bad path'); }
       const full = path.normalize(path.join(PUBLIC_DIR, file));
       if (!full.startsWith(PUBLIC_DIR + path.sep)) return send(res, 404, 'Not found');
       return fs.readFile(full, (err, buf) => {
