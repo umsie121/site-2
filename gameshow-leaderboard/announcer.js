@@ -19,11 +19,15 @@ const MODEL = process.env.ANNOUNCER_MODEL || 'claude-opus-5-5';
 const WRITER_TIMEOUT_MS = parseInt(process.env.ANNOUNCER_TIMEOUT_MS || '6000', 10);
 const BATCH_MS = 1300; // gather rapid-fire texts into one announcement
 
-const SYSTEM = `You are "Max Volume", the larger-than-life live announcer for a family-and-friends GAMES NIGHT, broadcast on a big screen with sound effects and music.
+const SYSTEM = `You are "Max Volume", the legendary arena announcer for a family-and-friends GAMES NIGHT, broadcast on a big screen with lasers, sound effects and music. Your style is a prize-fight ring announcer crossed with a primetime game-show host: booming, theatrical, larger than life.
 
 Write ONE announcement for the moment described. Rules:
-- 1 or 2 short, punchy sentences, at most 32 words. It will be spoken aloud by a text-to-speech voice.
-- Spoken-word only: no emojis, hashtags, markdown, quotation marks, stage directions or sound-effect words.
+- 1 or 2 short, punchy sentences, at most 32 words, unless the moment asks for a roll call or allows more. It will be performed by an expressive text-to-speech voice.
+- Perform it like a ring announcer: build tension with "..." pauses before the big reveal, stretch the climactic words by repeating letters (for example "Teeeam Ceee!", "Let's gooooo!", "READYYYY"), and end on the loudest moment. Stretch at most 2 words per line.
+- You may add up to 2 voice cues from exactly this set, placed right before the words they affect: [excited] [shouting] [whispers] [laughs]. Example: "[whispers] Ladies and gentlemen... [shouting] Teeeam Aaaa takes the lead!"
+- Otherwise spoken-word only: no emojis, hashtags, markdown, quotation marks or sound-effect words.
+- Do not use the catchphrase "let's get ready to rumble" (it's trademarked); invent your own signature hype lines.
+- When asked for a ROLL CALL, read out every listed player's name for that team, in a rhythmic, hyped way.
 - Use team names and player names exactly as given. Numbers must be correct; write them as digits.
 - Big game-show energy: dramatic, witty, warm. Playful teasing is fine, but never mean, never crude, and keep it family-friendly and respectful for a mixed-age crowd.
 - React to the story: lead changes, comebacks, close races, runaway leaders, big swings, the player who scored.
@@ -34,10 +38,10 @@ Reply with the announcement text only.`;
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const T = {
   big: [
-    (t, d) => `Oh my goodness! ${t} just smashed in ${d} points!`,
-    (t, d) => `Stop the clocks! ${d} massive points for ${t}!`,
-    (t, d) => `Are you seeing this? ${t} with a monster ${d}-point haul!`,
-    (t, d) => `Boom! ${t} goes big with ${d} points!`,
+    (t, d) => `[shouting] Oh my goodness! ${t} just smashed in ${d} points!`,
+    (t, d) => `Stop... the... clocks! [shouting] ${d} massive points for ${t}!`,
+    (t, d) => `[excited] Are you seeing this? ${t} with a monster ${d}-point haul!`,
+    (t, d) => `Boooom! ${t} goes BIG with ${d} points!`,
     (t, d) => `That is a statement! ${d} points straight into the ${t} bank!`,
   ],
   mid: [
@@ -66,10 +70,10 @@ const T = {
     (t, d) => `Ouch! ${d} points slipping away from ${t}!`,
   ],
   leader: [
-    (t, s) => `We have a new leader! ${t} storms to the top with ${s}!`,
-    (t, s) => `The crown changes hands! ${t} takes first place on ${s}!`,
-    (t, s) => `What a turnaround! ${t} are now leading the pack with ${s}!`,
-    (t, s) => `Make some noise! ${t} have seized the lead with ${s} points!`,
+    (t, s) => `[whispers] Ladies and gentlemen... [shouting] we have a NEW LEADERRR! ${t} storms to the top with ${s}!`,
+    (t, s) => `The crown... changes... hands! [shouting] ${t}! Number one with ${s}!`,
+    (t, s) => `[excited] What a turnaround! ${t} have seized the leeeead with ${s} points!`,
+    (t, s) => `Make some noise! [shouting] ${t} are now on TOP of the world with ${s}!`,
   ],
   close: [
     (a, b, g) => `And it's neck and neck! Just ${g} between ${a} and ${b}!`,
@@ -86,19 +90,33 @@ const T = {
     () => `Hold on to your seats, the board just exploded!`,
   ],
   round: [
-    (r) => `Ladies and gentlemen, it's time for ${r}! Let's go!`,
-    (r) => `Here we go! ${r} starts right now!`,
-    (r) => `Get ready, everybody! ${r} is underway!`,
+    (r) => `[whispers] Ladies and gentlemen... [shouting] are you READYYYY? It's time for ${r}!`,
+    (r) => `From the bright lights of Games Night... it's time for... [shouting] ${r}! Let's get it onnnn!`,
+    (r) => `Settle in, take your seats... [shouting] ${r} starts... RIGHT... NOWWW!`,
   ],
   game: [
-    (g) => `Next up, it's ${g}! Teams, get ready!`,
-    (g) => `Coming up next: ${g}! Bring your A-game!`,
-    (g) => `Time to play ${g}! Who wants it most?`,
+    (g) => `And now... the main event... [shouting] ${g}! Teams, get readyyyy!`,
+    (g) => `[excited] Coming up next, it's ${g}! Bring your A-game, it's showtimmme!`,
+    (g) => `[whispers] Next up... [shouting] ${g}! Who wants it mooost?`,
   ],
   correction: [
     () => `Hold the phone! The judges have made a correction!`,
     () => `Rewind! The judges are changing that one!`,
     () => `Wait a minute! Let's run that back!`,
+  ],
+  rollcall: [
+    (m) => `${m}, take a bow!`,
+    (m) => `Give it up for ${m}!`,
+    (m) => `Hats off to ${m}!`,
+  ],
+  rumble: [
+    (r, lead) => `[whispers] Ladiessss and gentlemennnn... boys and girls... [shouting] are you READYYYY for ${r}? Let's get it onnnnn!`,
+    (r, lead) => `[whispers] From the brightest lights in the house... with ${lead} leading the way... [shouting] it is SHOWTIMMMME! ${r}!`,
+    (r, lead) => `[whispers] Ladies and gentlemen... the moment has arrived... [shouting] ${r}! Let the games... BEGINNNN!`,
+  ],
+  results: [
+    (g, w, m) => `[whispers] The results for ${g} are in... and the winner is... [shouting] ${w}! ${m}, take a bow!`,
+    (g, w, m) => `[whispers] In first place for ${g}... [shouting] ${w}! Give it up for ${m}!`,
   ],
   fire: [
     (t, n) => `${t} are on fire! That's ${n} in a row!`,
@@ -106,18 +124,18 @@ const T = {
     (t, n) => `${n} in a row for ${t}! They are unstoppable!`,
   ],
   introOpen: [
-    () => `Ladies and gentlemen, welcome to Games Night! Teams, one trophy, and bragging rights forever. Let's meet our contenders!`,
-    () => `Good evening and welcome to the ultimate showdown! Put your hands together as we meet tonight's teams!`,
+    () => `[whispers] Ladies and gentlemen... boys and girls... [shouting] welcome... to... GAMES NIGHT! Let's meet our contenders!`,
+    () => `[whispers] Good evening... and welcome to the ultimate showdown. [shouting] Are you READYYYY to meet tonight's teams?`,
   ],
   introTeam: [
-    (t, m) => `Introducing ${t}! ${m}!`,
-    (t, m) => `Give it up for ${t}! Starring ${m}!`,
-    (t, m) => `Make some noise for ${t}! ${m}!`,
-    (t, m) => `Next up, it's ${t}! ${m}!`,
+    (t, m) => `In this corner... [shouting] ${t}! ${m}!`,
+    (t, m) => `Give it up for... [shouting] ${t}! Starring ${m}!`,
+    (t, m) => `Make some noise for... [shouting] ${t}! ${m}!`,
+    (t, m) => `And entering the arena... [shouting] ${t}! ${m}!`,
   ],
   introClose: [
-    () => `The stage is set. The stakes are high. Let the games begin!`,
-    () => `Four teams, one champion. Let's play!`,
+    () => `The stage is set... the stakes are high... [shouting] let the games... BEGINNNN!`,
+    () => `Teams, one champion... [shouting] let's get it onnnnn!`,
   ],
   timerStart: [
     (d) => `You have ${d} on the clock. Starting now!`,
@@ -130,13 +148,13 @@ const T = {
     () => `Buzzer! Time is up!`,
   ],
   suspense: [
-    () => `Ladies and gentlemen, the scores are in. After a night of fierce competition, your Games Night champions are...`,
-    () => `This is the moment we've all been waiting for. The winner of Games Night is...`,
-    () => `Drumroll please. Taking home the crown tonight...`,
+    () => `[whispers] Ladies and gentlemen... the scores are in. After a night of fierce competition... your Games Night champions are...`,
+    () => `[whispers] This is the moment we have all been waiting for... the winner of Games Night... is...`,
+    () => `[whispers] Drumroll please... Taking home the crown tonight...`,
   ],
   reveal: [
-    (t, s, m) => `${t}! With ${s} points! ${m}, you are the champions!`,
-    (t, s, m) => `${t}! Champions of Games Night with ${s} points! Congratulations ${m}!`,
+    (t, s, m) => `[shouting] ${t}! With ${s} points! ${m}... you are the CHAMPIONSSS!`,
+    (t, s, m) => `[shouting] Teeeam... ${t}! Champions of Games Night with ${s} points! Congratulations ${m}!`,
   ],
 };
 
@@ -174,11 +192,11 @@ function createAnnouncer({ getState, broadcast }) {
   function clean(text) {
     return String(text || '')
       .replace(/[*_#`"“”]/g, '')
-      .replace(/\[[^\]]*\]|\([^)]*\)/g, '')
+      .replace(/\[(?!(?:excited|shouting|whispers|laughs)\])[^\]]*\]|\([^)]*\)/gi, '')
       .replace(/\p{Extended_Pictographic}/gu, '')
       .replace(/\s+/g, ' ')
       .trim()
-      .slice(0, 320);
+      .slice(0, 420);
   }
 
   async function write(moment, fallback) {
@@ -224,9 +242,14 @@ function createAnnouncer({ getState, broadcast }) {
       mood,
       team: focusTeam || null,
       tts: tts.mode(),
-      lines: lines.map((l) => ({ id: tts.register(l.text, l.mood || mood), text: l.text })),
+      // text = on-screen caption; speak = what the voice says (pronunciations applied)
+      lines: lines.map((l) => ({
+        id: tts.register(l.speak || l.text, l.mood || mood),
+        text: tts.stripTags(l.text),
+        speak: tts.stripTags(tts.pronounce(l.speak || l.text)),
+      })),
     };
-    for (const l of lines) recent.push(l.text);
+    for (const l of lines) recent.push(tts.stripTags(l.text));
     while (recent.length > 12) recent.shift();
     console.log(`[announcer] (${mood}) ${lines.map((l) => l.text).join(' / ')}`);
     broadcast({ events: [ann], source: 'announcer' });
@@ -303,6 +326,12 @@ function createAnnouncer({ getState, broadcast }) {
     else if (contested && gap >= 40) line += ' ' + pick(T.runaway)(now[0].name, gap);
 
     if (onFire && !leaderChanged) line += ' ' + pick(T.fire)(team(onFire.team).name, onFire.count);
+    // Major moment: roll-call every player on the team at the centre of it
+    const star = leaderChanged ? newLeader : onFire ? onFire.team : bd >= 25 ? bid : null;
+    if (star) {
+      facts.push(`MAJOR MOMENT. ROLL CALL for ${team(star).name}: ${listNames(team(star).members)}. Up to 3 sentences / 55 words this time.`);
+      line += ' ' + pick(T.rollcall)(listNames(team(star).members));
+    }
     const text = await write(facts.join('\n'), line);
     emit('score', onFire && mood === 'score' ? 'hype' : mood, leaderChanged ? newLeader : bid, [{ text }]);
   }
@@ -312,13 +341,13 @@ function createAnnouncer({ getState, broadcast }) {
     scores,
     round(label) {
       run(async () => {
-        const text = await write(`A new round is starting: ${label}. Hype the room up for it and mention the current leader.`, pick(T.round)(label));
+        const text = await write(`A new round is starting: ${label}. Open it like a title fight: a hushed build, then explode with the round name. Mention who's leading.`, pick(T.round)(label));
         emit('round', 'round', null, [{ text }]);
       });
     },
     game(name) {
       run(async () => {
-        const text = await write(`The next game is ${name}. Introduce it with excitement.`, pick(T.game)(name));
+        const text = await write(`The next game is ${name}. Introduce it like the main event of the night.`, pick(T.game)(name));
         emit('game', 'round', null, [{ text }]);
       });
     },
@@ -363,6 +392,44 @@ function createAnnouncer({ getState, broadcast }) {
           { text: intro, mood: 'suspense' },
           { text: reveal, mood: 'winner' },
         ]);
+      });
+    },
+    // Scripted cold open: date -> address -> hosts -> title
+    opening(show) {
+      run(async () => {
+        const hosts = show.hosts || [];
+        const hostList = listNames(hosts);
+        emit('opening', 'opening', null, [
+          { text: `On ${show.date}...`, speak: `[whispers] On ${show.dateSpoken}...`, mood: 'suspense' },
+          { text: `...at ${show.address}...`, speak: `[whispers] at ${show.addressSpoken || show.address}...`, mood: 'suspense' },
+          { text: `${hosts.length === 1 ? 'One legendary host' : (['', 'One', 'Two', 'Three', 'Four', 'Five'][hosts.length] || hosts.length) + ' legendary hosts'}... ${hosts.join('... ')}...`, speak: `[excited] ${hosts.length === 1 ? 'one legendary host' : (['', 'one', 'two', 'three', 'four', 'five'][hosts.length] || hosts.length) + ' legendary hosts'}... ${hosts.slice(0, -1).join('... ')}${hosts.length > 1 ? '... and ' : ''}${hosts[hosts.length - 1] || ''}...`, mood: 'hype' },
+          { text: `...came together to bring you... the ${show.eventTitle} ${show.eventSubtitle}!`, speak: `came together to bring you... [shouting] the ${show.eventTitle.toLowerCase()}... ${show.eventSubtitle.charAt(0)}${show.eventSubtitle.slice(1).toLowerCase()}aaaa!`, mood: 'rumble' },
+        ]);
+      });
+    },
+    rumble() {
+      run(async () => {
+        const s = getState();
+        const label = s.game ? `${s.round}: ${s.game}` : s.round;
+        const lead = standings()[0];
+        const text = await write(
+          `The host hit the big HYPE button before ${label}. Deliver the signature ring-announcer opener of the night: a hushed "ladies and gentlemen" build with "...", then explode. Up to 3 sentences / 45 words.`,
+          pick(T.rumble)(label, lead ? lead.name : 'everyone')
+        );
+        emit('rumble', 'rumble', null, [{ text }]);
+      });
+    },
+    results(label, placements) {
+      run(async () => {
+        const winners = placements.filter((p) => p.place === 1).map((p) => team(p.team));
+        const facts = placements.map((p) => `${p.place}. ${team(p.team).name} (+${p.points}, now ${team(p.team).score})`).join('\n');
+        const roll = winners.map((w) => `${w.name}: ${listNames(w.members)}`).join('; ');
+        const fallback = pick(T.results)(label, winners.map((w) => w.name).join(' and '), listNames(winners.flatMap((w) => w.members)));
+        const text = await write(
+          `Results for ${label} (placement points awarded):\n${facts}\nAnnounce the winner of ${label} with a dramatic pause, then ROLL CALL the winning players: ${roll}. Briefly mention any change at the top of the overall standings. Up to 3 sentences / 60 words.`,
+          fallback
+        );
+        emit('results', 'hype', winners[0] ? winners[0].id : null, [{ text }]);
       });
     },
     intro() {

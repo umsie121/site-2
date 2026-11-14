@@ -30,6 +30,18 @@ const STATE_FILE = path.join(DATA_DIR, 'state.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'teams.json'), 'utf8'));
+tts.setPronunciations(config.pronounce);
+
+// Opening-titles details (date, address, map location, hosts). Your real details
+// live in show.local.json, which is git-ignored so your address is never published.
+function loadShow() {
+  for (const f of ['show.local.json', 'show.example.json']) {
+    try {
+      return { ...JSON.parse(fs.readFileSync(path.join(__dirname, f), 'utf8')), _file: f };
+    } catch (_) {}
+  }
+  return { date: '', dateSpoken: '', address: '', lat: 51.5, lon: -0.12, hosts: [], eventTitle: 'GAMES NIGHT', eventSubtitle: 'EXTRAVAGANZA' };
+}
 
 // ---------------------------------------------------------------- state
 function freshState() {
@@ -40,6 +52,7 @@ function freshState() {
     game: '',
     voice: true,
     timer: null, // { endsAt, total }
+    placementPoints: config.placementPoints || [100, 75, 50, 25],
     streak: null, // { team, count }
     teams: config.teams.map((t) => ({ ...t, score: 0 })),
     feed: [], // recent events for the ticker
@@ -118,6 +131,10 @@ function snapshot() {
 function addFeed(text, color) {
   state.feed.unshift({ id: ++state.seq, ts: Date.now(), text, color });
   state.feed = state.feed.slice(0, 20);
+}
+
+function ordinalWord(n) {
+  return n + (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
 }
 
 function teamById(id) {
@@ -274,6 +291,47 @@ function runText(text, source) {
         announcer.game(a.text);
         replies.push(`Now playing: ${state.game}`);
         break;
+      case 'results': {
+        snapshot();
+        const pts = state.placementPoints;
+        let pos = 0;
+        const summary = [];
+        const placements = [];
+        for (const group of a.order) {
+          const award = pts[pos] ?? pts[pts.length - 1] ?? 0;
+          for (const id of group) {
+            const t = teamById(id);
+            t.score += award;
+            placements.push({ team: id, place: pos + 1, points: award });
+            if (award) events.push({ kind: 'score', team: id, delta: award, placement: pos + 1 });
+            summary.push(`${ordinalWord(pos + 1)} ${t.name}${group.length > 1 ? ' (tie)' : ''} +${award}`);
+          }
+          pos += group.length;
+        }
+        const label = state.game || state.round;
+        addFeed(`${label} results: ${summary.join(', ')}`, teamById(a.order[0][0]).color);
+        events.push({ kind: 'results', label, placements });
+        announcer.results(label, placements);
+        replies.push(`Results: ${summary.join(', ')}\n\n${standingsText()}`);
+        break;
+      }
+      case 'points':
+        state.placementPoints = a.points;
+        replies.push(`Placement points now: ${a.points.map((p, i) => `${ordinalWord(i + 1)} ${p}`).join(', ')}`);
+        break;
+      case 'rumble':
+        events.push({ kind: 'rumble' });
+        announcer.rumble();
+        replies.push('Ladies and gentlemen... rumble mode engaged!');
+        break;
+      case 'opening': {
+        const show = loadShow();
+        events.push({ kind: 'opening' });
+        announcer.opening(show);
+        announcer.intro();
+        replies.push(`Rolling the opening titles${show._file === 'show.example.json' ? ' (using example details: create show.local.json for your own)' : ''}, then the team intros!`);
+        break;
+      }
       case 'intro':
         events.push({ kind: 'intro' });
         announcer.intro();
@@ -333,7 +391,7 @@ function runText(text, source) {
     save();
     broadcast({ events, source });
   }
-  const scoreEvents = events.filter((e) => e.kind === 'score' && e.delta);
+  const scoreEvents = events.filter((e) => e.kind === 'score' && e.delta && !e.placement);
   if (scoreEvents.length) announcer.scores(scoreEvents, scoresBefore);
   if (undidScore) announcer.correction();
   console.log(`[${source}] ${JSON.stringify(text)} → ${replies.join(' | ').replace(/\n/g, ' / ')}`);
@@ -470,6 +528,11 @@ const server = http.createServer(async (req, res) => {
       const body = parseBody(await readBody(req), req.headers['content-type']);
       if (!safeEqual(body.pin || '', ADMIN_PIN)) return send(res, 401, JSON.stringify({ error: 'Wrong PIN' }), 'application/json');
       return send(res, 200, JSON.stringify(await handleChat(body.text, 'chat')), 'application/json');
+    }
+
+    if (req.method === 'GET' && route === '/api/show') {
+      const { _file, ...show } = loadShow();
+      return send(res, 200, JSON.stringify(show), 'application/json');
     }
 
     if (req.method === 'GET' && route === '/api/info') {

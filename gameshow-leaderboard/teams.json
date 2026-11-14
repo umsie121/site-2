@@ -1,6 +1,11 @@
 {
   "title": "GAMES NIGHT",
   "subtitle": "THE ULTIMATE SHOWDOWN",
+  "placementPoints": [100, 75, 50, 25],
+  "pronounce": {
+    "Samer": "Saah-mare",
+    "Umayair": "Ooh-my-air"
+  },
   "teams": [
     {
       "id": "A",

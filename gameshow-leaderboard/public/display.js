@@ -468,6 +468,54 @@
     });
   }
 
+  // Ring-announcer hype moment before a round
+  function rumbleSequence() {
+    enqueue(async () => {
+      lasers(true);
+      GameAudio.sfx.crowd(9, 1.2);
+      const label = state.game ? `${state.round} · ${state.game}` : state.round;
+      showTakeover({ color: '#ff2bd6', kicker: label, main: 'ARE YOU READY?!', sticky: true });
+      const ann = await Announcer.waitFor('rumble', 8000);
+      await GameAudio.sfx.riser(1.0);
+      slam(1.4);
+      if (ann) await Announcer.playLine(ann, 0, 'LADIES & GENTLEMEN'); else await sleep(3500);
+      GameAudio.sfx.airhorn(); GameAudio.sfx.applause(4.5, 1.6);
+      slam(1.6);
+      confettiColors = state.teams.map((t) => t.color).concat('#ffffff');
+      confettiUntil = performance.now() + 3500;
+      showTakeover({ color: '#00e5ff', kicker: label, main: "LET'S GO!", sticky: true });
+      await sleep(2600);
+      Announcer.finish();
+      takeover.classList.remove('on');
+      lasers(false);
+      await sleep(400);
+    });
+  }
+
+  // Placement results card after a game
+  function resultsCard(label, placements) {
+    enqueue(async () => {
+      if (winnerUp) return;
+      const top = teamOf(placements[0].team);
+      lasers(true, 6000);
+      GameAudio.sfx.boomBoom();
+      takeover.style.setProperty('--c', top ? top.color : '#ffd34d');
+      takeover.firstElementChild.innerHTML = `<div class="to-rays"></div>
+        <div class="to-kicker">${esc(label)} · RESULTS</div>
+        <div class="results-list">${placements.map((p, i) => {
+          const t = teamOf(p.team);
+          return `<div class="res-row" style="--c:${t.color}; animation-delay:${0.4 + i * 0.35}s">
+            <span class="res-place">${p.place}${ordinal(p.place)}</span><span class="res-name">${esc(t.name)}</span><span class="res-pts">+${fmt(p.points)}</span></div>`;
+        }).join('')}</div>`;
+      takeover.classList.add('on');
+      await sleep(600 + placements.length * 350);
+      slam(1); burst(innerWidth / 2, innerHeight * 0.4, top.color, 160, 1.5);
+      await sleep(3600);
+      takeover.classList.remove('on');
+      await sleep(400);
+    });
+  }
+
   function clearOverlays() {
     lasers(false);
     winnerUp = false;
@@ -513,6 +561,22 @@
         case 'announce': Announcer.handle(e); break;
         case 'streak': streakMoment(e.team, e.count); break;
         case 'intro': introSequence(); break;
+        case 'rumble': rumbleSequence(); break;
+        case 'opening':
+          enqueue(async () => {
+            const ann = await Announcer.waitFor('opening', 9000);
+            await Opening.run({
+              ann,
+              playLine: Announcer.playLine,
+              slam, lasers, burst,
+              confetti: (ms) => { confettiColors = ['#00e5ff', '#ff2bd6', '#ffc400', '#39ff88', '#ffffff']; confettiUntil = performance.now() + ms; },
+            });
+            Announcer.finish();
+            lasers(false);
+          });
+          introSequence();
+          break;
+        case 'results': resultsCard(e.label, e.placements); break;
         case 'voice': Announcer.setEnabled(e.on); syncDock(); break;
         case 'game': enqueue(() => showBanner('NOW PLAYING: ' + e.text, 3600)); break;
         case 'clear': clearOverlays(); GameAudio.sfx.whoosh(); break;
@@ -637,6 +701,7 @@
     Announcer.setEnabled(prefs.voice !== false && state?.voice !== false);
     GameAudio.onChange(syncDock);
     GameAudio.onBeat(onBeat);
+    Opening.prepare();
     if (prefs.track && prefs.track !== 'mp3') GameAudio.setTrack(prefs.track);
     // songs dropped into public/music/ become the "My MP3s" playlist
     fetch('api/music').then((r) => r.json()).then((list) => {

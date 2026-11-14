@@ -17,6 +17,9 @@ const MODEL = process.env.HOSTBOT_MODEL || process.env.ANNOUNCER_MODEL || 'claud
 const COMMANDS = `Command language (one command per array item):
 - "<TEAM_ID> +N" or "<TEAM_ID> -N": add/subtract points, e.g. "A +10", "C -5"
 - "<PlayerName> +N": add points to that player's team AND credit the player on screen. Prefer this whenever the points are for something a specific player did.
+- "results <ids in finishing order>": award the fixed placement points after a game, e.g. "results C A D B" (1st C ... last B). Ties use "=", e.g. "results C A=D B". PREFER THIS whenever the host describes who won / came second etc. in a game, instead of inventing point amounts.
+- "points N N N N": change the placement points table (1st, 2nd, 3rd, ...)
+- "rumble": the big ring-announcer hype moment before a round ("hype the room", "get everyone pumped")
 - "set <TEAM_ID> N": set an exact score (only when the host clearly asks to set/correct a total)
 - "undo": undo the last change (use for "oops", "take that back", "undo that")
 - "round <text>": change the round label, e.g. "round 3", "round Lightning Round"
@@ -24,7 +27,8 @@ const COMMANDS = `Command language (one command per array item):
 - "msg <text>": flash a big message on screen (announcer reads it)
 - "say <text>": announcer speaks the text (no banner)
 - "hype": announcer recaps the standings
-- "intro": cinematic team introductions
+- "opening": the full cinematic cold open (map, hosts, title) followed by team intros
+- "intro": team introductions only
 - "timer <seconds>" (3-3600) or "timer stop"
 - "winner": dramatic winner reveal; "clear": remove winner screen/message
 - "rename <TEAM_ID> <new name>"
@@ -38,6 +42,7 @@ const SYSTEM = `You are the backstage operator for a live GAMES NIGHT scoreboard
 ${COMMANDS}
 
 Rules:
+- When the host gives a finishing order (who won, who came second...), use "results". Teams not mentioned simply aren't included.
 - Only output points the host actually stated or clearly implied. Never invent amounts. If a needed amount or team is missing or ambiguous, output no commands and ask a short question in "reply".
 - Map team mentions by ID, name, or any member's name. Use the exact spellings given in the state.
 - "X and Y both get 10" means two commands. "Everyone gets 5" means one command per team.
@@ -65,7 +70,7 @@ function createHostBot({ getState }) {
       .sort((a, b) => b.score - a.score)
       .map((t) => `- id ${t.id}: "${t.name}", ${t.score} points, players: ${t.members.join(', ')}`)
       .join('\n');
-    return `Current state: round "${s.round}"${s.game ? `, game "${s.game}"` : ''}.\nTeams (ranked):\n${teams}\nRecent changes: ${s.feed.slice(0, 5).map((f) => f.text).join('; ') || 'none'}`;
+    return `Current state: round "${s.round}"${s.game ? `, game "${s.game}"` : ''}. Placement points: ${s.placementPoints.join(', ')}.\nTeams (ranked):\n${teams}\nRecent changes: ${s.feed.slice(0, 5).map((f) => f.text).join('; ') || 'none'}`;
   }
 
   async function translate(text) {

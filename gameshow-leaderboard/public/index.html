@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Bungee+Inline&family=Monoton&family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
   <link rel="stylesheet" href="display.css" />
 </head>
 <body>
@@ -78,6 +79,29 @@
     </div>
   </div>
 
+  <!-- ======= cinematic opening ======= -->
+  <div class="cinema" id="cinema">
+    <div class="cine-map" id="cineMap"></div>
+    <div class="cine-radar"></div>
+    <div class="cine-hud">
+      <div class="hud-grid"></div>
+      <svg class="reticle" viewBox="0 0 200 200" aria-hidden="true">
+        <circle cx="100" cy="100" r="90" class="r1"/><circle cx="100" cy="100" r="60" class="r2"/><circle cx="100" cy="100" r="6" class="r3"/>
+        <path d="M100 0v30M100 170v30M0 100h30M170 100h30" class="r4"/>
+      </svg>
+      <div class="hud-corner tl"></div><div class="hud-corner tr"></div><div class="hud-corner bl"></div><div class="hud-corner br"></div>
+      <div class="hud-status" id="hudStatus"></div>
+      <div class="hud-read"><div>LAT <b id="hudLat">—</b></div><div>LON <b id="hudLon">—</b></div><div>ALT <b id="hudAlt">—</b></div></div>
+      <div class="hud-rec"><span>● REC</span> <b id="hudTime"></b></div>
+      <div class="pin"><div class="pin-ring"></div><div class="pin-ring d2"></div><div class="pin-dot"></div><div class="pin-label" id="pinLabel"></div></div>
+    </div>
+    <div class="cine-text" id="cineText"></div>
+    <div class="cine-hosts" id="cineHosts"></div>
+    <div class="cine-title"><div class="ct-main" id="ctMain"></div><div class="ct-sub" id="ctSub"></div><div class="shock"></div><div class="shock s2"></div></div>
+    <div class="letterbox top"></div><div class="letterbox bottom"><div class="cine-sub" id="cineSub"></div></div>
+    <div class="grain"></div>
+  </div>
+
   <div class="soundwarn" id="soundwarn" hidden>🔇 SOUND PAUSED BY THE BROWSER · CLICK ANYWHERE TO RESUME</div>
 
   <div class="dock" id="dock">
@@ -96,8 +120,10 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="audio.js"></script>
   <script src="announcer.js"></script>
+  <script src="opening.js"></script>
   <script src="display.js"></script>
 </body>
 </html>

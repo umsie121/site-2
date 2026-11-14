@@ -47,29 +47,25 @@ const Announcer = (() => {
     chosenVoice = pickVoice();
   }
 
-  function speakBrowser(text, mood) {
+  function speakBrowser(speakText, captionText, mood) {
     return new Promise((resolve) => {
       if (!('speechSynthesis' in window)) return resolve();
-      const u = new SpeechSynthesisUtterance(text);
+      const u = new SpeechSynthesisUtterance(speakText);
       if (chosenVoice) u.voice = chosenVoice;
-      u.rate = mood === 'suspense' ? 0.88 : 1.06;
-      u.pitch = mood === 'suspense' ? 0.8 : 1.0;
+      const big = ['hype', 'rumble', 'intro', 'winner', 'round', 'opening'].includes(mood);
+      u.rate = mood === 'suspense' ? 0.82 : big ? 0.96 : 1.05;
+      u.pitch = mood === 'suspense' ? 0.75 : big ? 0.85 : 0.95;
       u.volume = 1;
-      const words = splitWords(text);
-      let shown = 0;
-      u.onboundary = (e) => {
-        if (e.name && e.name !== 'word') return;
-        let pos = 0;
-        shown = words.findIndex((w) => (pos += w.length + 1) > e.charIndex) + 1 || shown;
-        renderCaption(words, shown);
-        fakeLevel = 1;
-      };
-      const done = () => { renderCaption(words, words.length); resolve(); };
+      const est = Math.max(1.5, speakText.length / (13 * u.rate));
+      const stop = timedCaption(captionText, est);
+      let finished = false;
+      const done = () => { if (finished) return; finished = true; stop(); resolve(); };
+      u.onboundary = () => { fakeLevel = 1; };
       u.onend = done; u.onerror = done;
-      GameAudio.duck(0.22, Math.max(2, text.length / 13));
+      GameAudio.duck(0.22, est);
       speechSynthesis.cancel();
       speechSynthesis.speak(u);
-      setTimeout(done, 4000 + text.length * 120); // safety net
+      setTimeout(done, 4000 + speakText.length * 120); // safety net
     });
   }
 
@@ -78,8 +74,9 @@ const Announcer = (() => {
   const caption = $('#onairText');
   const splitWords = (t) => t.split(/\s+/).filter(Boolean);
 
+  let captionTarget = caption;
   function renderCaption(words, shown) {
-    caption.innerHTML = words.map((w, i) => `<span class="${i < shown ? 'on' : ''}">${w.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])}</span>`).join(' ');
+    captionTarget.innerHTML = words.map((w, i) => `<span class="${i < shown ? 'on' : ''}">${w.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])}</span>`).join(' ');
   }
 
   function timedCaption(text, seconds) {
@@ -133,18 +130,24 @@ const Announcer = (() => {
   requestAnimationFrame(drawViz);
 
   // -------------------------------------------------------------- playback
-  async function playLine(ann, i, label) {
+  const ARENA = { opening: 1, rumble: 1, intro: 1, winner: 1, hype: 0.85, round: 0.8, results: 0.85, score: 0.45, ouch: 0.35, correction: 0.3, message: 0.35, say: 0.4 };
+  // opts.captionEl: render captions there (film subtitles) instead of the ON AIR bar
+  async function playLine(ann, i, label, opts = {}) {
     const line = ann.lines[i];
     if (!line) return;
     const clips = await ann.ready;
-    showBar(label);
+    captionTarget = opts.captionEl || caption;
+    if (!opts.captionEl) showBar(label);
     spotlight(ann.team, true);
+    const suspense = (ann.type === 'winner' && i === 0) || (ann.type === 'opening' && i < 2);
+    const arena = suspense ? 0.6 : ARENA[ann.mood] ?? 0.4;
     if (clips[i]) {
+      if (arena >= 0.8 && !suspense) GameAudio.sfx.crowd(clips[i].duration + 1.5, 0.8);
       const stop = timedCaption(line.text, clips[i].duration);
-      await GameAudio.playVoice(clips[i]);
+      await GameAudio.playVoice(clips[i], arena);
       stop();
     } else {
-      await speakBrowser(line.text, i === 0 && ann.type === 'winner' ? 'suspense' : ann.mood);
+      await speakBrowser(line.speak || line.text, line.text, (i === 0 && ann.type === 'winner') || (ann.type === 'opening' && i < 2) ? 'suspense' : ann.mood);
     }
   }
 
@@ -197,7 +200,7 @@ const Announcer = (() => {
       if (!enabled || !GameAudio.ready) return;
       prepare(ann);
       // Sequences (winner reveal, team intros) are played by the display's choreography.
-      if (ann.type === 'winner' || ann.type === 'intro') {
+      if (['winner', 'intro', 'rumble', 'opening'].includes(ann.type)) {
         if (waiters[ann.type]) { waiters[ann.type](ann); delete waiters[ann.type]; } else pending[ann.type] = ann;
         return;
       }
@@ -220,7 +223,7 @@ const Announcer = (() => {
     finish() { spotlight(null, false); hideBar(); },
     test() {
       if (!GameAudio.ready) return;
-      const ann = { type: 'say', mood: 'hype', team: null, tts: 'browser', lines: [{ text: 'Testing, testing! Is this thing on? Welcome to Games Night!' }] };
+      const ann = { type: 'say', mood: 'hype', team: null, tts: 'browser', lines: [{ text: 'Testing, testing! Is this thing on? Welcome to Games Night!', speak: 'Testing, testing! Is this thing on? Welcome to Games Night!' }] };
       prepare(ann);
       queue.push(ann);
       pump();

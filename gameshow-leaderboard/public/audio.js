@@ -104,27 +104,40 @@ const GameAudio = (() => {
     return buf;
   }
 
+  let arenaGain, verbGain;
   function buildVoiceChain() {
     voiceIn = ctx.createGain();
-    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 95;
-    const body = ctx.createBiquadFilter(); body.type = 'peaking'; body.frequency.value = 180; body.gain.value = 2.5; body.Q.value = 0.8;
-    const presence = ctx.createBiquadFilter(); presence.type = 'peaking'; presence.frequency.value = 3200; presence.gain.value = 4.5; presence.Q.value = 0.9;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 70;
+    const boom = ctx.createBiquadFilter(); boom.type = 'lowshelf'; boom.frequency.value = 160; boom.gain.value = 5; // "voice of god" chest
+    const presence = ctx.createBiquadFilter(); presence.type = 'peaking'; presence.frequency.value = 3000; presence.gain.value = 4.5; presence.Q.value = 0.9;
     const air = ctx.createBiquadFilter(); air.type = 'highshelf'; air.frequency.value = 9000; air.gain.value = 3;
+    // gentle PA-style saturation
+    const sat = ctx.createWaveShaper();
+    const curve = new Float32Array(2048);
+    for (let i = 0; i < 2048; i++) { const x = i / 1024 - 1; curve[i] = Math.tanh(x * 1.8) / Math.tanh(1.8); }
+    sat.curve = curve; sat.oversample = '2x';
     const vcomp = ctx.createDynamicsCompressor();
-    vcomp.threshold.value = -26; vcomp.knee.value = 6; vcomp.ratio.value = 6; vcomp.attack.value = 0.004; vcomp.release.value = 0.18;
+    vcomp.threshold.value = -28; vcomp.knee.value = 6; vcomp.ratio.value = 7; vcomp.attack.value = 0.003; vcomp.release.value = 0.2;
     voiceOut = ctx.createGain(); voiceOut.gain.value = voiceVol * 1.35;
-    voiceIn.connect(hp).connect(body).connect(presence).connect(air).connect(vcomp).connect(voiceOut);
-
+    voiceIn.connect(hp).connect(boom).connect(presence).connect(air).connect(sat).connect(vcomp).connect(voiceOut);
     voiceOut.connect(master); // dry
-    const verb = ctx.createConvolver(); verb.buffer = impulse(2.6, 3.2);
-    const verbGain = ctx.createGain(); verbGain.gain.value = 0.2;
-    voiceOut.connect(verb).connect(verbGain).connect(master);
-    const slap = ctx.createDelay(1); slap.delayTime.value = 0.14;
-    const slapFb = ctx.createGain(); slapFb.gain.value = 0.22;
-    const slapLp = ctx.createBiquadFilter(); slapLp.type = 'lowpass'; slapLp.frequency.value = 3000;
-    const slapGain = ctx.createGain(); slapGain.gain.value = 0.16;
-    voiceOut.connect(slap); slap.connect(slapLp).connect(slapFb).connect(slap);
-    slapLp.connect(slapGain).connect(master);
+
+    // big hall
+    const preDelay = ctx.createDelay(0.2); preDelay.delayTime.value = 0.04;
+    const verb = ctx.createConvolver(); verb.buffer = impulse(3.4, 2.6);
+    verbGain = ctx.createGain(); verbGain.gain.value = 0.2;
+    voiceOut.connect(preDelay).connect(verb).connect(verbGain).connect(master);
+
+    // stadium PA echo: long, dark repeats bouncing round the arena ("...TEAM A... A... A...")
+    arenaGain = ctx.createGain(); arenaGain.gain.value = 0.2;
+    const echo = ctx.createDelay(1.5); echo.delayTime.value = 0.36;
+    const echoFb = ctx.createGain(); echoFb.gain.value = 0.38;
+    const echoLp = ctx.createBiquadFilter(); echoLp.type = 'lowpass'; echoLp.frequency.value = 2200;
+    const echoHp = ctx.createBiquadFilter(); echoHp.type = 'highpass'; echoHp.frequency.value = 250;
+    voiceOut.connect(arenaGain).connect(echo);
+    echo.connect(echoLp).connect(echoHp).connect(echoFb).connect(echo);
+    const echoOut = ctx.createGain(); echoOut.gain.value = 0.55;
+    echoHp.connect(echoOut).connect(master);
 
     analyser = ctx.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.7;
     vcomp.connect(analyser);
@@ -135,8 +148,12 @@ const GameAudio = (() => {
   }
 
   // Play a decoded voice clip through the broadcast chain; resolves when done.
-  function playVoice(buffer) {
+  // arena: 0 = studio, 1 = full stadium PA (big hall + long echoes)
+  function playVoice(buffer, arena = 0.4) {
     return new Promise((resolve) => {
+      const t = now();
+      arenaGain.gain.setTargetAtTime(0.05 + arena * 0.5, t, 0.05);
+      verbGain.gain.setTargetAtTime(0.12 + arena * 0.22, t, 0.05);
       const src = ctx.createBufferSource();
       src.buffer = buffer;
       src.connect(voiceIn);
@@ -331,6 +348,106 @@ const GameAudio = (() => {
         noise({ t: t + off, dur: 0.35, vol: 0.2, type: 'lowpass', freq: 2500, to: 200 });
       });
       return new Promise((r) => setTimeout(r, 950));
+    },
+    // ---- cinematic kit for the opening titles
+    // huge low brass "BRAAAM"
+    braam(len = 3.2) {
+      if (!ctx || !sfxOn) return;
+      const t = now() + 0.02;
+      for (const [f, v] of [[41.2, 0.14], [55, 0.16], [82.4, 0.12], [110, 0.08], [65.4, 0.06]]) {
+        for (const dt of [-10, 0, 10]) {
+          const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = dt;
+          const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 3;
+          lp.frequency.setValueAtTime(120, t); lp.frequency.exponentialRampToValueAtTime(1400, t + 0.25); lp.frequency.exponentialRampToValueAtTime(200, t + len);
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.08); g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+          o.connect(lp).connect(g).connect(sfxBus); o.start(t); o.stop(t + len + 0.1);
+        }
+      }
+      tone({ type: 'sine', freq: 60, glideTo: 28, t, dur: len * 0.7, vol: 0.7 });
+      noise({ t, dur: 1.2, vol: 0.12, type: 'lowpass', freq: 900, to: 120 });
+    },
+    // ominous swelling drone; returns stop()
+    drone(seconds = 30) {
+      if (!ctx || !sfxOn) return () => {};
+      const t = now();
+      const g = ctx.createGain(); g.connect(sfxBus);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16, t + 4);
+      const nodes = [];
+      for (const [f, type] of [[36.7, 'sawtooth'], [55, 'sawtooth'], [73.4, 'triangle'], [110.2, 'sine'], [164.8, 'sine']]) {
+        const o = ctx.createOscillator(); o.type = type; o.frequency.value = f;
+        const lfo = ctx.createOscillator(); lfo.frequency.value = 0.08 + Math.random() * 0.1;
+        const lg = ctx.createGain(); lg.gain.value = f * 0.004; lfo.connect(lg).connect(o.frequency);
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(200, t); lp.frequency.linearRampToValueAtTime(900, t + seconds);
+        const og = ctx.createGain(); og.gain.value = type === 'sine' ? 0.5 : 0.35;
+        o.connect(lp).connect(og).connect(g); o.start(t); lfo.start(t);
+        nodes.push(o, lfo);
+      }
+      const stopAll = () => {
+        const tt = now();
+        g.gain.cancelScheduledValues(tt); g.gain.setTargetAtTime(0.0001, tt, 0.4);
+        nodes.forEach((n) => { try { n.stop(tt + 2); } catch (_) {} });
+      };
+      const auto = setTimeout(stopAll, seconds * 1000);
+      return () => { clearTimeout(auto); stopAll(); };
+    },
+    // heartbeat thump
+    heartbeat() {
+      if (!ctx || !sfxOn) return;
+      const t = now();
+      tone({ type: 'sine', freq: 62, glideTo: 40, t, dur: 0.22, vol: 0.7 });
+      tone({ type: 'sine', freq: 58, glideTo: 38, t: t + 0.24, dur: 0.2, vol: 0.5 });
+    },
+    // radar ping
+    ping() {
+      if (!ctx || !sfxOn) return;
+      const t = now();
+      tone({ type: 'sine', freq: 1480, t, dur: 0.6, vol: 0.06 });
+      tone({ type: 'sine', freq: 1480, t: t + 0.18, dur: 0.5, vol: 0.025 });
+    },
+    // target-lock chirp
+    lock() {
+      if (!ctx || !sfxOn) return;
+      const t = now();
+      [0, 0.09, 0.18].forEach((o, i) => tone({ type: 'square', freq: 1200 + i * 400, t: t + o, dur: 0.07, vol: 0.05, filter: { freq: 5000 } }));
+      tone({ type: 'sine', freq: 2400, t: t + 0.3, dur: 0.5, vol: 0.06 });
+    },
+    // neon tube flickering on
+    neonBuzz() {
+      if (!ctx || !sfxOn) return;
+      const t = now();
+      tone({ type: 'square', freq: 100, t, dur: 0.18, vol: 0.05, filter: { freq: 1500 } });
+      tone({ type: 'sawtooth', freq: 120, t: t + 0.03, dur: 0.12, vol: 0.03, filter: { freq: 2500 } });
+      noise({ t, dur: 0.05, vol: 0.12, type: 'highpass', freq: 4000 });
+      noise({ t: t + 0.08, dur: 0.03, vol: 0.08, type: 'highpass', freq: 5000 });
+    },
+    typeTick() {
+      if (!ctx || !sfxOn) return;
+      noise({ dur: 0.025, vol: 0.09, type: 'bandpass', freq: 2500 + Math.random() * 1500, q: 2, attack: 0.001 });
+    },
+    // crowd roar that swells under a big announcement
+    crowd(seconds = 5, peak = 1) {
+      if (!ctx || !sfxOn) return;
+      const t = now();
+      const g = ctx.createGain(); g.connect(sfxBus);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.5 * peak, t + seconds * 0.7);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + seconds);
+      for (const [f, q, v] of [[450, 0.6, 0.5], [1100, 0.8, 0.4], [2600, 1, 0.18]]) {
+        const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
+        const lfo = ctx.createOscillator(); lfo.frequency.value = 0.6 + Math.random();
+        const lg = ctx.createGain(); lg.gain.value = 0.25 * v;
+        const vg = ctx.createGain(); vg.gain.value = v;
+        lfo.connect(lg).connect(vg.gain);
+        s.connect(bp).connect(vg).connect(g);
+        s.start(t, Math.random()); s.stop(t + seconds + 0.1); lfo.start(t); lfo.stop(t + seconds + 0.1);
+      }
+      for (let i = 0; i < 4 * peak; i++) {
+        const at = t + seconds * (0.3 + Math.random() * 0.6);
+        const f = 1600 + Math.random() * 900;
+        tone({ type: 'sine', freq: f, glideTo: f * 1.5, t: at, dur: 0.4, vol: 0.03, attack: 0.04 });
+      }
     },
     // short TV-news stab
     newsSting() {

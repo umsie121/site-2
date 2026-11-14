@@ -45,6 +45,15 @@
     .help { color: var(--dim); font-size: 14px; line-height: 1.5; }
     .help code { color: #9fe9ff; background: #0b0d24; padding: 1px 6px; border-radius: 4px; }
     a { color: #9fe9ff; }
+    .edit { background: none; border: 0; padding: 2px 6px; font-size: 18px; vertical-align: middle; }
+    .btns.three { grid-template-columns: repeat(3, 1fr); }
+    .res-pick { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 8px; }
+    .res-pick button { border-left: 5px solid var(--c); text-align: left; padding-left: 12px; font-size: 15px; }
+    .res-pick button.used { opacity: 0.35; }
+    .res-order { min-height: 24px; margin-bottom: 8px; font-size: 16px; line-height: 1.6; }
+    .res-order span { display: inline-block; margin: 0 6px 4px 0; padding: 3px 9px; border-radius: 6px; background: #0b0d24; border: 1px solid var(--c); }
+    .res-order:empty::before { content: 'Tap teams in finishing order: winner first.'; color: var(--dim); }
+    .pts-note { color: var(--dim); font-size: 13px; margin-top: 6px; }
     .chat { background: linear-gradient(160deg, #1a1046, #10132e); border: 1px solid #5a2a8a; border-radius: 14px; padding: 12px; margin: 14px 0; box-shadow: 0 0 30px rgba(255, 43, 214, 0.15); }
     .chat h2 { font: 600 11px 'Orbitron'; letter-spacing: 0.25em; color: #ff9cf0; margin-bottom: 8px; }
     .log { max-height: 34vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
@@ -84,7 +93,23 @@
   <div class="teams" id="teams"></div>
 
   <div class="panel">
+    <h2>🏁 GAME RESULTS (FIXED POINTS)</h2>
+    <div class="res-pick" id="resPick"></div>
+    <div class="res-order" id="resOrder"></div>
+    <div class="row">
+      <button id="resTie" type="button">= TIE WITH PREVIOUS</button>
+      <button id="resClear" type="button">CLEAR</button>
+      <button id="resGo" type="button" class="gold">AWARD POINTS</button>
+    </div>
+    <div class="pts-note" id="ptsNote"></div>
+  </div>
+
+  <div class="panel">
     <h2>SHOW CONTROL</h2>
+    <div class="row" style="margin-bottom:6px">
+      <button data-cmd="opening" class="gold">🎬 OPENING TITLES</button>
+      <button data-cmd="rumble" class="gold">🥊 RUMBLE HYPE</button>
+    </div>
     <div class="row" style="margin-bottom:6px">
       <button data-cmd="undo">↶ UNDO</button>
       <button data-cmd="round next">NEXT ROUND</button>
@@ -92,7 +117,7 @@
       <button data-cmd="clear">CLEAR SCREEN</button>
     </div>
     <div class="row" style="margin-bottom:6px">
-      <button data-cmd="intro" class="gold">🎬 TEAM INTROS</button>
+      <button data-cmd="intro">👥 TEAM INTROS</button>
       <button data-cmd="timer 30">⏱ 30s</button>
       <button data-cmd="timer 60">⏱ 60s</button>
       <button data-cmd="timer 120">⏱ 2m</button>
@@ -220,11 +245,12 @@
       if (!el.children.length) {
         el.innerHTML = state.teams.map((t) => `
           <div class="team" style="--c:${t.color}" data-id="${t.id}">
-            <div class="team-top"><div><div class="team-name"></div><div class="team-rank"></div></div><div class="team-score"></div></div>
+            <div class="team-top"><div><span class="team-name"></span><button class="edit" data-rename="${t.id}" title="Rename team">✏️</button><div class="team-rank"></div></div><div class="team-score"></div></div>
             <div class="members">${t.members.map(esc).join(' · ')}</div>
-            <div class="btns">
-              ${[1, 5, 10, 25].map((n) => `<button class="plus" data-cmd="${t.id} +${n}">+${n}</button>`).join('')}
-              ${[1, 5, 10, 25].map((n) => `<button class="minus" data-cmd="${t.id} -${n}">−${n}</button>`).join('')}
+            <div class="btns three">
+              <button class="plus" data-cmd="${t.id} +10">+10<br><small>correct</small></button>
+              <button class="plus" data-cmd="${t.id} +25">+25<br><small>bonus</small></button>
+              <button class="minus" data-cmd="${t.id} -10">−10<br><small>penalty</small></button>
             </div>
             <form class="custom" data-prefix="${t.id} "><input name="t" inputmode="numeric" placeholder="+50 or -15" /><button>GO</button></form>
           </div>`).join('');
@@ -239,6 +265,50 @@
       const m = /^ROUND (\d+)$/.exec(state.round);
       roundNo = m ? +m[1] : roundNo;
     }
+
+    // ✏️ rename a team
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-rename]');
+      if (!b) return;
+      const t = state.teams.find((x) => x.id === b.dataset.rename);
+      const name = prompt(`New name for ${t.name}:`, t.name);
+      if (name && name.trim() && name.trim() !== t.name) send(`rename ${t.id} ${name.trim()}`);
+    });
+
+    // 🏁 results picker: tap teams in finishing order
+    let resOrder = []; // [[id], [id, id] (tie), ...]
+    function renderResults() {
+      if (!state) return;
+      const used = new Set(resOrder.flat());
+      $('#resPick').innerHTML = state.teams.map((t) => `<button type="button" data-pick="${t.id}" style="--c:${t.color}" class="${used.has(t.id) ? 'used' : ''}">${esc(t.name)}</button>`).join('');
+      const pts = state.placementPoints || [];
+      let pos = 0;
+      $('#resOrder').innerHTML = resOrder.map((g) => {
+        const p = pts[pos] ?? pts[pts.length - 1] ?? 0;
+        const html = `<span style="--c:${state.teams.find((x) => x.id === g[0]).color}">${pos + 1}${['st', 'nd', 'rd'][pos] || 'th'}: ${g.map((id) => esc(state.teams.find((x) => x.id === id).name)).join(' = ')} <b>+${p}</b></span>`;
+        pos += g.length;
+        return html;
+      }).join('');
+      $('#ptsNote').textContent = `Points: ${pts.map((p, i) => `${i + 1}${['st', 'nd', 'rd'][i] || 'th'} ${p}`).join(' · ')}. Change with a command like "points 10 7 5 3".`;
+    }
+    let tieNext = false;
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-pick]');
+      if (!b || b.classList.contains('used')) return;
+      if (tieNext && resOrder.length) resOrder[resOrder.length - 1].push(b.dataset.pick);
+      else resOrder.push([b.dataset.pick]);
+      tieNext = false; $('#resTie').classList.remove('gold');
+      renderResults();
+    });
+    $('#resTie').addEventListener('click', () => { tieNext = !tieNext; $('#resTie').classList.toggle('gold', tieNext); });
+    $('#resClear').addEventListener('click', () => { resOrder = []; tieNext = false; renderResults(); });
+    $('#resGo').addEventListener('click', async () => {
+      if (!resOrder.length) return toast('Tap the teams in finishing order first', true);
+      const label = state.game || state.round;
+      if (!confirm(`Award ${label} results?`)) return;
+      await send('results ' + resOrder.map((g) => g.join('=')).join(' '));
+      resOrder = []; renderResults();
+    });
 
     document.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-cmd]');
@@ -306,7 +376,7 @@
     const es = new EventSource('events');
     es.onopen = () => { $('#conn').className = 'ok'; $('#conn').lastChild.textContent = 'LIVE'; };
     es.onerror = () => { $('#conn').className = ''; $('#conn').lastChild.textContent = 'RECONNECTING'; };
-    es.onmessage = (m) => { state = JSON.parse(m.data).state; renderTeams(); };
+    es.onmessage = (m) => { state = JSON.parse(m.data).state; renderTeams(); renderResults(); };
 
     if (pin) $('#lock').style.display = 'none'; else lock();
   </script>

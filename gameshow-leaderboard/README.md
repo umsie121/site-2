@@ -88,6 +88,24 @@ What it does on its own:
 
 **Rough costs for a night:** Claude is about 1p per line. ElevenLabs is roughly 100–150 characters per line, so a few hundred lines fit within a low-tier monthly plan (check current pricing).
 
+## 🎬 Opening titles (`opening`)
+
+A cinematic cold open, then straight into the team introductions:
+
+1. Letterbox bars, film grain, an ominous drone and a heartbeat. The date types itself out while the narrator whispers.
+2. A satellite map flies in from space to your venue, with a targeting overlay, live coordinates, altitude and radar pings.
+3. **TARGET LOCKED**: the address appears on a pin.
+4. **YOUR HOSTS**: each host's name slams in under a spotlight.
+5. **GAMES NIGHT** lights up one neon letter at a time, then **EXTRAVAGANZA** explodes: shockwave, air horn, crowd and confetti.
+
+Your date, address, map location and hosts live in **`show.local.json`**. It is git-ignored, so your address is never published. Copy `show.example.json` to `show.local.json` and fill it in. Without it, the opening uses placeholder details. The map needs internet, and if the map can't load, a radar animation plays instead.
+
+**Pronunciations:** add names to `"pronounce"` in `teams.json` (e.g. `"Samer": "Saah-mare"`). The voice uses the phonetic spelling everywhere, while the screen shows the real name.
+
+## 🏁 Scoring
+
+After each game, use **🏁 GAME RESULTS** on the phone panel: tap teams in finishing order and press **AWARD POINTS**. Every game is then worth the same fixed points: **1st 100 · 2nd 75 · 3rd 50 · 4th 25**. You can change these with `points 10 7 5 3`, or set `placementPoints` in `teams.json`. Use **= TIE** for joint places. By text, use `results C A D B` or `results C A=D B`. The screen shows a results card, and the announcer reads the winners and roll-calls their players. For extras during a game, use **+10 correct**, **+25 bonus** or **−10 penalty**.
+
 ## Pizzazz that happens automatically
 
 - **🔥 ON FIRE streaks:** when a team scores 3, 5 or 8 times in a row, there's a fire takeover, embers rise off their row, and they get an "ON FIRE ×N" badge until someone else scores. The announcer calls the streak.
@@ -131,7 +149,11 @@ Tracks crossfade when you switch. You can also switch with the **TRACK** dropdow
 | `hype` | The announcer gives a dramatic recap of the standings |
 | `voice off` · `voice on` | Mutes or unmutes the announcer |
 | `rename A The Lions` | Renames a team (scoring by the new name works too) |
-| `intro` | 🎬 Cinematic team introductions: each team's name slams in, the players' names fly in, and the announcer introduces everyone |
+| `opening` | 🎬 Full cinematic cold open (see Opening titles), then team intros |
+| `rumble` | 🥊 Ring-announcer hype before a round: "ARE YOU READY?!", lasers, crowd, air horn |
+| `results C A D B` | 🏁 Awards placement points for the current game (ties: `A=D`) |
+| `rename A The Lions` | Renames a team (or use ✏️ on the phone panel) |
+| `intro` | Team introductions only:: each team's name slams in, the players' names fly in, and the announcer introduces everyone |
 | `timer 60` · `timer 2m` · `timer stop` | ⏱ A countdown ring replaces the title, the music switches to Thinking Time, it beeps through the last 10 seconds with a red pulsing frame, then **TIME'S UP!** with a buzzer |
 | `winner` | Drumroll, then a full-screen winner reveal with confetti (handles ties) |
 | `clear` | Removes the winner screen or message |

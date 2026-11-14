@@ -37,7 +37,11 @@ const HELP = [
   'hype  (announcer recaps the standings)',
   'voice on|off  (announcer)',
   'rename A The Lions',
-  'intro  (cinematic team introductions)',
+  'results C A D B  (1st..last; ties: A=D)',
+  'points 100 75 50 25  (placement points)',
+  'rumble  (ring-announcer hype for the round)',
+  'opening  (cinematic cold open + team intros)',
+  'intro  (team introductions only)',
   'timer 60  /  timer 2m  /  timer stop',
   'winner  /  music on|off',
   'music funk|tension|lounge|arcade|epic|synth|mp3|next',
@@ -98,7 +102,32 @@ function parseClause(raw, teams) {
   if (/^(winner|crown|finale|celebrate)$/.test(lower)) return { type: 'winner' };
   if (/^(clear|hide)( winner| msg| message| banner)?$/.test(lower)) return { type: 'clear' };
   if (/^(hype|recap|commentary|standings recap|where are we)$/.test(lower)) return { type: 'recap' };
-  if (/^(intro|introductions?|meet the teams|opening|open the show)$/.test(lower)) return { type: 'intro' };
+  if (/^(opening|opening titles|cold open|open the show|start the show|cinematic|cinematic intro)$/.test(lower)) return { type: 'opening' };
+  if (/^(intro|introductions?|meet the teams|team intros?)$/.test(lower)) return { type: 'intro' };
+  if (/^(rumble|get ready|are you ready|hype up|pump it up|showtime|let'?s go)$/.test(lower)) return { type: 'rumble' };
+  if ((m = lower.match(/^points?\s+((?:\d+[\s,/]*){1,8})$/))) {
+    const pts = m[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+    return { type: 'points', points: pts };
+  }
+  if ((m = text.match(/^(?:results?|placings?|placements?|finishing order|standings for round)\s*[:\-]?\s+(.+)$/i))) {
+    const body = m[1].trim();
+    const parts = body.includes(',') || body.includes('>') ? body.split(/\s*[,>]\s*/) : body.split(/\s+/);
+    const order = [];
+    const seen = new Set();
+    for (const part of parts.filter(Boolean)) {
+      const group = [];
+      for (const tok of part.split('=')) {
+        const hit = resolveTeam(tok.replace(/^(1st|2nd|3rd|4th|5th|6th|first|second|third|fourth|last)\s*/i, ''), teams);
+        if (!hit) return { error: `Unknown team "${tok}" in results. Use team letters, e.g. results C A D B` };
+        if (seen.has(hit.team.id)) return { error: `${hit.team.name} appears twice in the results` };
+        seen.add(hit.team.id);
+        group.push(hit.team.id);
+      }
+      order.push(group);
+    }
+    if (!order.length) return { error: 'Give the finishing order, e.g. results C A D B' };
+    return { type: 'results', order };
+  }
   if (/^(?:timer|countdown|clock) (?:stop|off|cancel|clear|end)$/.test(lower) || /^(?:stop|cancel) (?:the )?(?:timer|countdown|clock)$/.test(lower)) return { type: 'timer', seconds: 0 };
   if ((m = lower.match(/^(?:timer|countdown|clock|start timer)\s*(?:for\s+)?(\d+(?:\.\d+)?)\s*(s|sec|secs|seconds?|m|min|mins|minutes?)?$/))) {
     const n = parseFloat(m[1]);
@@ -165,7 +194,7 @@ function parseClause(raw, teams) {
 function parseMessage(body, teams) {
   const text = String(body || '').trim();
   if (!text) return [{ error: 'Empty message. Text HELP for commands.' }];
-  if (/^(msg|message|say|announce|speak|banner|show|round|rename|game|now playing|next game)\b/i.test(text)) {
+  if (/^(msg|message|say|announce|speak|banner|show|round|rename|game|now playing|next game|results?|placings?|placements?|finishing order)\b/i.test(text)) {
     return [parseClause(text, teams)];
   }
   return text

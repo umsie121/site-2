@@ -1,0 +1,12 @@
+{
+  "_note": "Copy to show.local.json (git-ignored) and fill in your own details. show.local.json is never committed.",
+  "date": "14 NOVEMBER 2026",
+  "dateSpoken": "the fourteenth of November, twenty twenty-six",
+  "address": "YOUR ADDRESS HERE",
+  "addressSpoken": "a secret location",
+  "lat": 51.5033,
+  "lon": -0.1196,
+  "hosts": ["Samer", "Tasnim", "Umayair"],
+  "eventTitle": "GAMES NIGHT",
+  "eventSubtitle": "EXTRAVAGANZA"
+}
